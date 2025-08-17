@@ -8,10 +8,10 @@
 
 #include "usb_descriptors.h"
 #include "tusb.h"
-#include "opendeck.h"
+#include "productiondeck.h"
 
-// Global OpenDeck instance (declared in main.cpp)
-extern OpenDeck* g_opendeck;
+// Global ProductionDeck instance (declared in main.cpp)
+extern ProductionDeck* g_productiondeck;
 
 // ===================================================================
 // USB Device Descriptor
@@ -232,14 +232,14 @@ bool usb_send_button_report(const uint8_t* button_states) {
 }
 
 void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16_t bufsize) {
-    if (!g_opendeck) return;
+    if (!g_productiondeck) return;
     
     switch (report_id) {
         case FEATURE_REPORT_RESET_V1:
             // V1 Reset: [0x0B, 0x63, ...]
             if (bufsize >= 2 && buffer[1] == 0x63) {
                 printf("USB: Reset command (V1)\n");
-                g_opendeck->reset_device();
+                g_productiondeck->reset_device();
             }
             break;
             
@@ -249,13 +249,13 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
                 if (buffer[1] == 0x02) {
                     // V2 Reset: [0x03, 0x02, ...]
                     printf("USB: Reset command (V2)\n");
-                    g_opendeck->reset_device();
+                    g_productiondeck->reset_device();
                 } else if (buffer[1] == 0x08) {
                     // V2 Brightness: [0x03, 0x08, brightness, ...]
                     if (bufsize >= 3) {
                         uint8_t brightness = buffer[2];
                         printf("USB: Set brightness %d%% (V2)\n", brightness);
-                        g_opendeck->set_brightness(brightness);
+                        g_productiondeck->set_brightness(brightness);
                     }
                 }
             }
@@ -267,7 +267,7 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
                 buffer[3] == 0xD1 && buffer[4] == 0x01) {
                 uint8_t brightness = buffer[5];
                 printf("USB: Set brightness %d%% (V1)\n", brightness);
-                g_opendeck->set_brightness(brightness);
+                g_productiondeck->set_brightness(brightness);
             }
             break;
             
@@ -278,7 +278,7 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
 }
 
 void usb_process_output_report(const uint8_t* buffer, uint16_t bufsize) {
-    if (!g_opendeck || bufsize < 8) return;
+    if (!g_productiondeck || bufsize < 8) return;
     
     // Parse output report header
     if (buffer[0] == OUTPUT_REPORT_IMAGE && buffer[1] == IMAGE_COMMAND_V2) {
@@ -291,7 +291,7 @@ void usb_process_output_report(const uint8_t* buffer, uint16_t bufsize) {
         if (key_id < STREAMDECK_KEYS) {
             printf("USB: Image packet key=%d seq=%d len=%d last=%d\n", 
                    key_id, sequence, payload_len, is_last);
-            g_opendeck->receive_image_packet(buffer, bufsize);
+            g_productiondeck->receive_image_packet(buffer, bufsize);
         }
     }
 }

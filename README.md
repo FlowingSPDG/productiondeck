@@ -1,10 +1,10 @@
-# OpenDeck - Open Source StreamDeck Alternative
+# ProductionDeck - Open Source StreamDeck Alternative
 
-![OpenDeck](https://img.shields.io/badge/Platform-RP2040-green)
+![ProductionDeck](https://img.shields.io/badge/Platform-RP2040-green)
 ![Status](https://img.shields.io/badge/Status-Alpha-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
-**OpenDeck** is an open-source hardware and software implementation of a StreamDeck-compatible device using the Raspberry Pi Pico (RP2040). It provides full compatibility with the official StreamDeck software by implementing the exact USB HID protocol used by Elgato StreamDeck Mini.
+**ProductionDeck** is an open-source hardware and software implementation of a StreamDeck-compatible device using the Raspberry Pi Pico (RP2040). It provides full compatibility with the official StreamDeck software by implementing the exact USB HID protocol used by Elgato StreamDeck Mini.
 
 ## 🚀 Features
 
@@ -124,11 +124,11 @@ brew install arm-none-eabi-gcc
 - Install [CMake](https://cmake.org/download/)
 - Install [ARM GCC Toolchain](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads)
 
-#### 3. Build OpenDeck
+#### 3. Build ProductionDeck
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/opendeck.git
-cd opendeck
+git clone https://github.com/your-username/productiondeck.git
+cd productiondeck
 
 # Create build directory
 mkdir build
@@ -146,10 +146,10 @@ make info
 
 ### Build Output
 After successful build, you'll find these files in `build/output/`:
-- `opendeck.uf2` - Main firmware file for flashing
-- `opendeck.bin` - Binary file
-- `opendeck.hex` - Hex file
-- `opendeck.elf` - ELF file with debug symbols
+- `productiondeck.uf2` - Main firmware file for flashing
+- `productiondeck.bin` - Binary file
+- `productiondeck.hex` - Hex file
+- `productiondeck.elf` - ELF file with debug symbols
 
 ## 📱 Flashing the Firmware
 
@@ -163,9 +163,9 @@ After successful build, you'll find these files in `build/output/`:
 2. **Flash Firmware:**
    ```bash
    # Copy UF2 file to the Pico
-   cp build/output/opendeck.uf2 /Volumes/RPI-RP2/  # macOS
-   cp build/output/opendeck.uf2 /media/RPI-RP2/    # Linux
-   # On Windows: drag opendeck.uf2 to RPI-RP2 drive
+   cp build/output/productiondeck.uf2 /Volumes/RPI-RP2/  # macOS
+   cp build/output/productiondeck.uf2 /media/RPI-RP2/    # Linux
+   # On Windows: drag productiondeck.uf2 to RPI-RP2 drive
    ```
 
 3. **Automatic Reboot:**
@@ -175,7 +175,7 @@ After successful build, you'll find these files in `build/output/`:
 ### Method 2: Debug Probe (Advanced)
 ```bash
 # Using OpenOCD with debug probe
-openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program build/opendeck.elf verify reset exit"
+openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program build/productiondeck.elf verify reset exit"
 ```
 
 ## 💻 Software Setup
@@ -183,7 +183,7 @@ openocd -f interface/picoprobe.cfg -f target/rp2040.cfg -c "program build/opende
 ### Windows
 1. Flash the firmware to your Pico
 2. Install [Stream Deck Software](https://www.elgato.com/gaming/stream-deck)
-3. Connect OpenDeck via USB
+3. Connect ProductionDeck via USB
 4. Should be recognized as "Stream Deck Mini"
 5. Configure keys in Stream Deck software
 
@@ -194,8 +194,8 @@ Same as Windows - the device uses standard USB HID drivers.
 
 ### PCB Design
 The project includes KiCad PCB files for a complete board design:
-- **Schematic:** `hardware/opendeck.sch`
-- **PCB Layout:** `hardware/opendeck.kicad_pcb`
+- **Schematic:** `hardware/productiondeck.sch`
+- **PCB Layout:** `hardware/productiondeck.kicad_pcb`
 - **Bill of Materials:** `hardware/BOM.csv`
 
 ### Display Connections
@@ -239,7 +239,7 @@ screen /dev/ttyUSB0 115200
 ```
 
 ### Debug Levels
-Modify `DEBUG_LEVEL` in `include/opendeck_config.h`:
+Modify `DEBUG_LEVEL` in `include/productiondeck_config.h`:
 - `0` - No debug output
 - `1` - Info messages only
 - `2` - Verbose debug output
@@ -275,7 +275,7 @@ make flash
 
 ## 📚 Protocol Documentation
 
-OpenDeck implements the exact StreamDeck Mini USB HID protocol:
+ProductionDeck implements the exact StreamDeck Mini USB HID protocol:
 
 ### USB Device Descriptors
 - **VID:** `0x0fd9` (Elgato Systems)
@@ -306,8 +306,8 @@ V2 Image Packet (1024 bytes):
 
 We welcome contributions! Please see:
 - [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
-- [Issues](https://github.com/your-username/opendeck/issues) for bug reports
-- [Discussions](https://github.com/your-username/opendeck/discussions) for questions
+- [Issues](https://github.com/your-username/productiondeck/issues) for bug reports
+- [Discussions](https://github.com/your-username/productiondeck/discussions) for questions
 
 ### Development Setup
 1. Fork the repository
@@ -332,10 +332,10 @@ This project is not affiliated with Elgato Systems. StreamDeck is a trademark of
 
 ## 📞 Support
 
-- **Documentation:** [Wiki](https://github.com/your-username/opendeck/wiki)
+- **Documentation:** [Wiki](https://github.com/your-username/productiondeck/wiki)
 - **Hardware Help:** [Hardware Guide](hardware/README.md)
-- **Firmware Issues:** [Submit Issue](https://github.com/your-username/opendeck/issues)
-- **Community:** [Discord Server](https://discord.gg/opendeck)
+- **Firmware Issues:** [Submit Issue](https://github.com/your-username/productiondeck/issues)
+- **Community:** [Discord Server](https://discord.gg/productiondeck)
 
 ---
 

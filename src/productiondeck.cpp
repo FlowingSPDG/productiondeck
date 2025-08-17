@@ -1,12 +1,12 @@
 // ===================================================================
-// OpenDeck Core Implementation
+// ProductionDeck Core Implementation
 // 
-// This file implements the main OpenDeck class that coordinates all
+// This file implements the main ProductionDeck class that coordinates all
 // device functionality including USB protocol, button scanning,
 // image reception, and display management.
 // ===================================================================
 
-#include "opendeck.h"
+#include "productiondeck.h"
 #include <cstdio>
 #include <cstdarg>
 
@@ -14,7 +14,7 @@
 // Constructor and Destructor
 // ===================================================================
 
-OpenDeck::OpenDeck() : core1_running_(false) {
+ProductionDeck::ProductionDeck() : core1_running_(false) {
     // Initialize state
     memset(&state_, 0, sizeof(state_));
     memset(&buttons_, 0, sizeof(buttons_));
@@ -24,7 +24,7 @@ OpenDeck::OpenDeck() : core1_running_(false) {
     state_.startup_time = time_us_32() / 1000;
 }
 
-OpenDeck::~OpenDeck() {
+ProductionDeck::~ProductionDeck() {
     shutdown();
 }
 
@@ -32,8 +32,8 @@ OpenDeck::~OpenDeck() {
 // Main Lifecycle Methods
 // ===================================================================
 
-bool OpenDeck::initialize() {
-    log_info("OpenDeck: Starting initialization...");
+bool ProductionDeck::initialize() {
+    log_info("ProductionDeck: Starting initialization...");
     
     // Initialize hardware first
     if (!init_hardware()) {
@@ -71,12 +71,12 @@ bool OpenDeck::initialize() {
     blink_status_led(100, 100);
     
     state_.initialized = true;
-    log_info("OpenDeck initialization complete");
+    log_info("ProductionDeck initialization complete");
     
     return true;
 }
 
-void OpenDeck::run() {
+void ProductionDeck::run() {
     if (!state_.initialized) {
         return;
     }
@@ -114,12 +114,12 @@ void OpenDeck::run() {
     watchdog_update();
 }
 
-void OpenDeck::shutdown() {
+void ProductionDeck::shutdown() {
     if (!state_.initialized) {
         return;
     }
     
-    log_info("OpenDeck: Shutting down...");
+    log_info("ProductionDeck: Shutting down...");
     
     // Stop second core
     #if USE_DUAL_CORE
@@ -140,14 +140,14 @@ void OpenDeck::shutdown() {
     }
     
     state_.initialized = false;
-    log_info("OpenDeck shutdown complete");
+    log_info("ProductionDeck shutdown complete");
 }
 
 // ===================================================================
 // Hardware Initialization
 // ===================================================================
 
-bool OpenDeck::init_hardware() {
+bool ProductionDeck::init_hardware() {
     log_info("Initializing hardware...");
     
     // Set up GPIO pins
@@ -163,7 +163,7 @@ bool OpenDeck::init_hardware() {
     return true;
 }
 
-bool OpenDeck::init_usb() {
+bool ProductionDeck::init_usb() {
     log_info("Initializing USB...");
     
     // Initialize TinyUSB
@@ -173,7 +173,7 @@ bool OpenDeck::init_usb() {
     return true;
 }
 
-bool OpenDeck::init_displays() {
+bool ProductionDeck::init_displays() {
     log_info("Initializing displays...");
     
     // Initialize each display
@@ -189,7 +189,9 @@ bool OpenDeck::init_displays() {
     return true;
 }
 
-bool OpenDeck::init_buttons() {
+
+
+bool ProductionDeck::init_buttons() {
     log_info("Initializing buttons...");
     
     #if USE_BUTTON_MATRIX
@@ -222,7 +224,7 @@ bool OpenDeck::init_buttons() {
 // GPIO and Hardware Setup
 // ===================================================================
 
-void OpenDeck::setup_gpio() {
+void ProductionDeck::setup_gpio() {
     // Status LEDs
     HardwareInterface::gpio_init_output(LED_STATUS_PIN, false);
     HardwareInterface::gpio_init_output(LED_USB_PIN, false);
@@ -239,7 +241,7 @@ void OpenDeck::setup_gpio() {
     }
 }
 
-void OpenDeck::setup_spi() {
+void ProductionDeck::setup_spi() {
     // Initialize SPI0 for display communication
     spi_init(SPI_PORT, SPI_BAUDRATE);
     
@@ -249,7 +251,7 @@ void OpenDeck::setup_spi() {
     // MISO not needed for displays
 }
 
-void OpenDeck::setup_pwm() {
+void ProductionDeck::setup_pwm() {
     // Set up PWM for display backlight control
     gpio_set_function(DISPLAY_BL_PIN, GPIO_FUNC_PWM);
     uint slice_num = pwm_gpio_to_slice_num(DISPLAY_BL_PIN);
@@ -262,7 +264,7 @@ void OpenDeck::setup_pwm() {
 // Button Scanning and Processing
 // ===================================================================
 
-void OpenDeck::scan_buttons() {
+void ProductionDeck::scan_buttons() {
     #if USE_BUTTON_MATRIX
     scan_button_matrix();
     #else
@@ -270,7 +272,7 @@ void OpenDeck::scan_buttons() {
     #endif
 }
 
-void OpenDeck::scan_button_matrix() {
+void ProductionDeck::scan_button_matrix() {
     uint8_t row_pins[] = BTN_ROW_PINS;
     uint8_t col_pins[] = BTN_COL_PINS;
     
@@ -303,7 +305,7 @@ void OpenDeck::scan_button_matrix() {
     }
 }
 
-void OpenDeck::scan_direct_buttons() {
+void ProductionDeck::scan_direct_buttons() {
     uint8_t btn_pins[] = BTN_DIRECT_PINS;
     
     buttons_.changed = false;
@@ -324,7 +326,7 @@ void OpenDeck::scan_direct_buttons() {
     }
 }
 
-bool OpenDeck::debounce_button(uint8_t key, bool raw_state) {
+bool ProductionDeck::debounce_button(uint8_t key, bool raw_state) {
     static bool debounce_state[STREAMDECK_KEYS] = {false};
     static uint32_t debounce_time[STREAMDECK_KEYS] = {0};
     
@@ -342,7 +344,7 @@ bool OpenDeck::debounce_button(uint8_t key, bool raw_state) {
     return buttons_.current[key]; // Return previous stable state
 }
 
-void OpenDeck::send_button_report() {
+void ProductionDeck::send_button_report() {
     if (!usb_hid_ready()) {
         return;
     }
@@ -358,7 +360,7 @@ void OpenDeck::send_button_report() {
 // Image Reception and Processing
 // ===================================================================
 
-void OpenDeck::receive_image_packet(const uint8_t* data, uint16_t length) {
+void ProductionDeck::receive_image_packet(const uint8_t* data, uint16_t length) {
     if (length < 8) {
         log_error("Invalid image packet length: %d", length);
         return;
@@ -420,7 +422,7 @@ void OpenDeck::receive_image_packet(const uint8_t* data, uint16_t length) {
     }
 }
 
-void OpenDeck::process_complete_image(uint8_t key_id) {
+void ProductionDeck::process_complete_image(uint8_t key_id) {
     if (key_id >= STREAMDECK_KEYS) return;
     
     ImageBuffer* buf = &image_buffers_[key_id];
@@ -447,7 +449,7 @@ void OpenDeck::process_complete_image(uint8_t key_id) {
     reset_image_buffer(key_id);
 }
 
-void OpenDeck::reset_image_buffer(uint8_t key_id) {
+void ProductionDeck::reset_image_buffer(uint8_t key_id) {
     if (key_id >= STREAMDECK_KEYS) return;
     
     ImageBuffer* buf = &image_buffers_[key_id];
@@ -458,40 +460,238 @@ void OpenDeck::reset_image_buffer(uint8_t key_id) {
 // Display Management
 // ===================================================================
 
-void OpenDeck::display_image(uint8_t key_id, const uint8_t* image_data, 
+void ProductionDeck::init_display(uint8_t display_id) {
+    // Validate display ID
+    if (display_id >= STREAMDECK_KEYS) {
+        log_error("Invalid display ID: %d", display_id);
+        return;
+    }
+    
+    log_info("Initializing display %d", display_id);
+    
+    // Get CS pin for this display
+    uint8_t cs_pins[] = DISPLAY_CS_PINS;
+    uint8_t cs_pin = cs_pins[display_id];
+    
+    // Select this display's CS pin
+    HardwareInterface::spi_select_device(cs_pin, true);
+    
+    // Reset the display using shared RST pin
+    log_debug("Resetting display %d", display_id);
+    HardwareInterface::gpio_set(DISPLAY_RST_PIN, false);
+    HardwareInterface::sleep_ms(10);
+    HardwareInterface::gpio_set(DISPLAY_RST_PIN, true);
+    HardwareInterface::sleep_ms(120); // Wait for display to boot
+    
+    // Send ST7735 initialization sequence
+    log_debug("Sending initialization sequence to display %d", display_id);
+    
+    // Software reset
+    send_display_command(0x01);
+    HardwareInterface::sleep_ms(150);
+    
+    // Sleep out
+    send_display_command(0x11);
+    HardwareInterface::sleep_ms(120);
+    
+    // Frame rate control
+    send_display_command(0xB1);
+    uint8_t frc[] = {0x01, 0x2C, 0x2D};
+    send_display_data(frc, sizeof(frc));
+    
+    send_display_command(0xB2);
+    send_display_data(frc, sizeof(frc));
+    
+    send_display_command(0xB3);
+    uint8_t frc2[] = {0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
+    send_display_data(frc2, sizeof(frc2));
+    
+    // Column inversion
+    send_display_command(0xB4);
+    uint8_t inv = 0x07;
+    send_display_data(&inv, 1);
+    
+    // Power control
+    send_display_command(0xC0);
+    uint8_t pwr1[] = {0xA2, 0x02, 0x84};
+    send_display_data(pwr1, sizeof(pwr1));
+    
+    send_display_command(0xC1);
+    uint8_t pwr2 = 0xC5;
+    send_display_data(&pwr2, 1);
+    
+    send_display_command(0xC2);
+    uint8_t pwr3[] = {0x0A, 0x00};
+    send_display_data(pwr3, sizeof(pwr3));
+    
+    send_display_command(0xC3);
+    uint8_t pwr4[] = {0x8A, 0x2A};
+    send_display_data(pwr4, sizeof(pwr4));
+    
+    send_display_command(0xC4);
+    uint8_t pwr5[] = {0x8A, 0xEE};
+    send_display_data(pwr5, sizeof(pwr5));
+    
+    // VCOM control
+    send_display_command(0xC5);
+    uint8_t vcom = 0x0E;
+    send_display_data(&vcom, 1);
+    
+    // Memory access control (270° rotation for StreamDeck Mini)
+    send_display_command(0x36);
+    uint8_t madctl = 0xC8; // RGB, row/col addr order, 270° rotation
+    send_display_data(&madctl, 1);
+    
+    // Color mode - 16 bit RGB565
+    send_display_command(0x3A);
+    uint8_t colmod = 0x05;
+    send_display_data(&colmod, 1);
+    
+    // Column address set (0-79)
+    send_display_command(0x2A);
+    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(caset, sizeof(caset));
+    
+    // Row address set (0-79)  
+    send_display_command(0x2B);
+    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(raset, sizeof(raset));
+    
+    // Gamma correction
+    send_display_command(0xE0);
+    uint8_t gmctrp[] = {0x02, 0x1C, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2D,
+                        0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10};
+    send_display_data(gmctrp, sizeof(gmctrp));
+    
+    send_display_command(0xE1);
+    uint8_t gmctrn[] = {0x03, 0x1D, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D,
+                        0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10};
+    send_display_data(gmctrn, sizeof(gmctrn));
+    
+    // Display on
+    send_display_command(0x29);
+    HardwareInterface::sleep_ms(10);
+    
+    // Deselect this display
+    HardwareInterface::spi_select_device(cs_pin, false);
+    
+    log_info("Display %d initialization complete", display_id);
+}
+
+void ProductionDeck::select_display(uint8_t display_id) {
+    if (display_id >= STREAMDECK_KEYS) {
+        return;
+    }
+    
+    // Deselect all displays first
+    uint8_t cs_pins[] = DISPLAY_CS_PINS;
+    for (int i = 0; i < STREAMDECK_KEYS; i++) {
+        HardwareInterface::spi_select_device(cs_pins[i], false);
+    }
+    
+    // Select the specified display
+    HardwareInterface::spi_select_device(cs_pins[display_id], true);
+}
+
+void ProductionDeck::send_display_command(uint8_t command) {
+    // Set DC pin low for command mode
+    HardwareInterface::gpio_set(DISPLAY_DC_PIN, false);
+    
+    // Send command byte
+    HardwareInterface::spi_write(SPI_PORT, &command, 1);
+}
+
+void ProductionDeck::send_display_data(const uint8_t* data, uint16_t length) {
+    // Set DC pin high for data mode
+    HardwareInterface::gpio_set(DISPLAY_DC_PIN, true);
+    
+    // Send data
+    HardwareInterface::spi_write(SPI_PORT, data, length);
+}
+
+void ProductionDeck::display_image(uint8_t key_id, const uint8_t* image_data, 
                             uint16_t width, uint16_t height) {
-    if (key_id >= STREAMDECK_KEYS || !state_.displays_ready) {
+    if (key_id >= STREAMDECK_KEYS || !state_.displays_ready || !image_data) {
         return;
     }
     
     log_debug("Displaying image on key %d (%dx%d)", key_id, width, height);
     
-    // TODO: Implement actual display driver interface
-    // This is where you would send the image data to the specific TFT display
+    // Select the display
+    select_display(key_id);
     
-    // For now, just log that we received an image
-    uint32_t pixel_count = width * height;
-    uint32_t byte_count = pixel_count * 3; // RGB
+    // Set window to full screen (80x80)
+    send_display_command(0x2A); // Column address set
+    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(caset, sizeof(caset));
     
-    log_info("Image data for key %d: %d pixels (%d bytes)", 
-             key_id, pixel_count, byte_count);
+    send_display_command(0x2B); // Row address set
+    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(raset, sizeof(raset));
+    
+    send_display_command(0x2C); // Memory write
+    
+    // Convert RGB888 to RGB565 and send to display
+    uint16_t pixel_count = width * height;
+    
+    for (uint16_t i = 0; i < pixel_count; i++) {
+        uint8_t r = image_data[i * 3 + 0];
+        uint8_t g = image_data[i * 3 + 1];
+        uint8_t b = image_data[i * 3 + 2];
+        
+        // Convert to RGB565
+        uint16_t rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+        
+        // Send as big-endian
+        uint8_t pixel_data[] = {(uint8_t)(rgb565 >> 8), (uint8_t)(rgb565 & 0xFF)};
+        send_display_data(pixel_data, 2);
+    }
+    
+    // Deselect display
+    uint8_t cs_pins[] = DISPLAY_CS_PINS;
+    HardwareInterface::spi_select_device(cs_pins[key_id], false);
+    
+    log_info("Image displayed on key %d: %d pixels", key_id, pixel_count);
 }
 
-void OpenDeck::clear_key(uint8_t key_id) {
-    if (key_id >= STREAMDECK_KEYS) return;
+void ProductionDeck::clear_key(uint8_t key_id) {
+    if (key_id >= STREAMDECK_KEYS || !state_.displays_ready) return;
     
-    // TODO: Clear specific display
     log_debug("Clearing key %d", key_id);
+    
+    // Select the display
+    select_display(key_id);
+    
+    // Set window to full screen (80x80)
+    send_display_command(0x2A); // Column address set
+    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(caset, sizeof(caset));
+    
+    send_display_command(0x2B); // Row address set
+    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    send_display_data(raset, sizeof(raset));
+    
+    send_display_command(0x2C); // Memory write
+    
+    // Fill entire screen with black (RGB565: 0x0000)
+    uint8_t black_pixel[] = {0x00, 0x00};
+    for (int i = 0; i < 80 * 80; i++) {
+        send_display_data(black_pixel, 2);
+    }
+    
+    // Deselect display
+    uint8_t cs_pins[] = DISPLAY_CS_PINS;
+    HardwareInterface::spi_select_device(cs_pins[key_id], false);
 }
 
-void OpenDeck::clear_all_keys() {
+void ProductionDeck::clear_all_keys() {
     for (int i = 0; i < STREAMDECK_KEYS; i++) {
         clear_key(i);
     }
     log_info("All keys cleared");
 }
 
-void OpenDeck::set_brightness(uint8_t brightness) {
+void ProductionDeck::set_brightness(uint8_t brightness) {
     brightness = MIN(brightness, 100);
     state_.current_brightness = brightness;
     
@@ -503,11 +703,16 @@ void OpenDeck::set_brightness(uint8_t brightness) {
     log_info("Brightness set to %d%% (PWM=%d)", brightness, pwm_level);
 }
 
+void ProductionDeck::set_display_brightness(uint8_t brightness) {
+    // This function is an alias for set_brightness for compatibility
+    set_brightness(brightness);
+}
+
 // ===================================================================
 // Device Control and Status
 // ===================================================================
 
-void OpenDeck::reset_device() {
+void ProductionDeck::reset_device() {
     log_info("Device reset requested");
     
     // Clear all images and reset state
@@ -527,19 +732,19 @@ void OpenDeck::reset_device() {
     log_info("Device reset complete");
 }
 
-const char* OpenDeck::get_firmware_version() {
+const char* ProductionDeck::get_firmware_version() {
     return "1.0.0";
 }
 
-bool OpenDeck::is_usb_connected() {
+bool ProductionDeck::is_usb_connected() {
     return state_.usb_connected;
 }
 
-bool OpenDeck::is_ready() {
+bool ProductionDeck::is_ready() {
     return state_.initialized && state_.displays_ready;
 }
 
-uint32_t OpenDeck::get_uptime_ms() {
+uint32_t ProductionDeck::get_uptime_ms() {
     return millis() - state_.startup_time;
 }
 
@@ -547,15 +752,15 @@ uint32_t OpenDeck::get_uptime_ms() {
 // Utility Functions
 // ===================================================================
 
-uint32_t OpenDeck::millis() {
+uint32_t ProductionDeck::millis() {
     return time_us_32() / 1000;
 }
 
-void OpenDeck::delay_ms(uint32_t ms) {
+void ProductionDeck::delay_ms(uint32_t ms) {
     sleep_ms(ms);
 }
 
-void OpenDeck::blink_status_led(uint16_t on_ms, uint16_t off_ms) {
+void ProductionDeck::blink_status_led(uint16_t on_ms, uint16_t off_ms) {
     static uint32_t last_toggle = 0;
     static bool led_state = false;
     static uint16_t current_on_ms = 500;
@@ -575,7 +780,7 @@ void OpenDeck::blink_status_led(uint16_t on_ms, uint16_t off_ms) {
     }
 }
 
-void OpenDeck::update_status_leds() {
+void ProductionDeck::update_status_leds() {
     // USB status LED
     HardwareInterface::gpio_set(LED_USB_PIN, state_.usb_connected);
     
@@ -583,7 +788,7 @@ void OpenDeck::update_status_leds() {
     HardwareInterface::gpio_set(LED_ERROR_PIN, false);
 }
 
-void OpenDeck::watchdog_update() {
+void ProductionDeck::watchdog_update() {
     #if WATCHDOG_ENABLED
     watchdog_update();
     #endif
@@ -593,7 +798,7 @@ void OpenDeck::watchdog_update() {
 // Logging Functions
 // ===================================================================
 
-void OpenDeck::log_debug(const char* format, ...) {
+void ProductionDeck::log_debug(const char* format, ...) {
     #if DEBUG_LEVEL >= 2
     printf("[DEBUG] ");
     va_list args;
@@ -604,7 +809,7 @@ void OpenDeck::log_debug(const char* format, ...) {
     #endif
 }
 
-void OpenDeck::log_info(const char* format, ...) {
+void ProductionDeck::log_info(const char* format, ...) {
     #if DEBUG_LEVEL >= 1
     printf("[INFO] ");
     va_list args;
@@ -615,7 +820,7 @@ void OpenDeck::log_info(const char* format, ...) {
     #endif
 }
 
-void OpenDeck::log_error(const char* format, ...) {
+void ProductionDeck::log_error(const char* format, ...) {
     printf("[ERROR] ");
     va_list args;
     va_start(args, format);
@@ -628,13 +833,13 @@ void OpenDeck::log_error(const char* format, ...) {
 // Multi-core Support
 // ===================================================================
 
-void OpenDeck::core1_entry() {
-    if (g_opendeck) {
-        g_opendeck->core1_main();
+void ProductionDeck::core1_entry() {
+    if (g_productiondeck) {
+        g_productiondeck->core1_main();
     }
 }
 
-void OpenDeck::core1_main() {
+void ProductionDeck::core1_main() {
     log_info("Core1: I/O processing started");
     
     while (core1_running_) {

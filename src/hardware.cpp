@@ -5,7 +5,7 @@
 // including GPIO, SPI, PWM, and timing functions for the RP2040.
 // ===================================================================
 
-#include "opendeck.h"
+#include "productiondeck.h"
 #include "hardware/gpio.h"
 #include "hardware/spi.h"
 #include "hardware/pwm.h"
@@ -246,7 +246,7 @@ void DisplayDriver::init_sequence() {
 
 void DisplayDriver::set_brightness(uint8_t brightness) {
     // Brightness control would typically be done via PWM on the backlight pin
-    // This is handled at a higher level in the main OpenDeck class
+    // This is handled at a higher level in the main ProductionDeck class
     printf("Display brightness set to %d\n", brightness);
 }
 

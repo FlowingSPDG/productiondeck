@@ -1,5 +1,5 @@
 // ===================================================================
-// OpenDeck - Open Source StreamDeck Alternative for RP2040
+// ProductionDeck - Open Source StreamDeck Alternative for RP2040
 // 
 // This file implements the main application entry point and core loop
 // for the RP2040-based StreamDeck compatible device.
@@ -10,14 +10,14 @@
 // Buttons: 6 tactile switches in 3x2 matrix
 // ===================================================================
 
-#include "opendeck.h"
+#include "productiondeck.h"
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "hardware/watchdog.h"
 #include "tusb.h"
 
 // Global application instance
-OpenDeck* g_opendeck = nullptr;
+ProductionDeck* g_productiondeck = nullptr;
 
 // ===================================================================
 // Main Application Entry Point
@@ -32,7 +32,7 @@ int main() {
     
     printf("\n");
     printf("========================================\n");
-    printf("OpenDeck v1.0 - StreamDeck Alternative\n");
+    printf("ProductionDeck v1.0 - StreamDeck Alternative\n");
     printf("Hardware: RP2040 (Raspberry Pi Pico)\n");
     printf("Target: StreamDeck Mini Compatible\n");
     printf("USB: VID=0x%04X PID=0x%04X\n", USB_VID, USB_PID);
@@ -47,20 +47,20 @@ int main() {
     #endif
     
     // Create main application instance
-    g_opendeck = new OpenDeck();
-    if (!g_opendeck) {
-        printf("ERROR: Failed to create OpenDeck instance\n");
+    g_productiondeck = new ProductionDeck();
+    if (!g_productiondeck) {
+        printf("ERROR: Failed to create ProductionDeck instance\n");
         panic("Memory allocation failed");
     }
     
     // Initialize the device
-    printf("Initializing OpenDeck...\n");
-    if (!g_opendeck->initialize()) {
-        printf("ERROR: OpenDeck initialization failed\n");
+    printf("Initializing ProductionDeck...\n");
+    if (!g_productiondeck->initialize()) {
+        printf("ERROR: ProductionDeck initialization failed\n");
         panic("Initialization failed");
     }
     
-    printf("OpenDeck initialized successfully\n");
+    printf("ProductionDeck initialized successfully\n");
     printf("USB VID:PID = %04X:%04X\n", USB_VID, USB_PID);
     printf("Waiting for USB connection...\n");
     
@@ -75,13 +75,13 @@ int main() {
         #endif
         
         // Run main application logic
-        g_opendeck->run();
+        g_productiondeck->run();
         
         // Periodic status output (for debugging)
         uint32_t now = time_us_32() / 1000;
         if (now - last_status_print > status_print_interval) {
-            if (g_opendeck->is_usb_connected()) {
-                printf("Status: USB connected, uptime=%lu ms\n", g_opendeck->get_uptime_ms());
+                    if (g_productiondeck->is_usb_connected()) {
+            printf("Status: USB connected, uptime=%lu ms\n", g_productiondeck->get_uptime_ms());
             } else {
                 printf("Status: Waiting for USB connection...\n");
             }
@@ -93,8 +93,8 @@ int main() {
     }
     
     // Cleanup (should never reach here)
-    g_opendeck->shutdown();
-    delete g_opendeck;
+    g_productiondeck->shutdown();
+    delete g_productiondeck;
     
     return 0;
 }
@@ -108,16 +108,16 @@ extern "C" {
 // Invoked when device is mounted (configured)
 void tud_mount_cb(void) {
     printf("USB: Device mounted\n");
-    if (g_opendeck) {
-        g_opendeck->blink_status_led(200, 200); // Fast blink when connected
+    if (g_productiondeck) {
+        g_productiondeck->blink_status_led(200, 200); // Fast blink when connected
     }
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void) {
     printf("USB: Device unmounted\n");
-    if (g_opendeck) {
-        g_opendeck->blink_status_led(1000, 1000); // Slow blink when disconnected
+    if (g_productiondeck) {
+        g_productiondeck->blink_status_led(1000, 1000); // Slow blink when disconnected
     }
 }
 
@@ -125,16 +125,16 @@ void tud_umount_cb(void) {
 // Within 7ms, device must draw an average current less than 2.5mA from bus
 void tud_suspend_cb(bool remote_wakeup_en) {
     printf("USB: Device suspended (remote_wakeup=%d)\n", remote_wakeup_en);
-    if (g_opendeck) {
-        g_opendeck->set_brightness(0); // Turn off displays to save power
+    if (g_productiondeck) {
+        g_productiondeck->set_brightness(0); // Turn off displays to save power
     }
 }
 
 // Invoked when USB bus is resumed
 void tud_resume_cb(void) {
     printf("USB: Device resumed\n");
-    if (g_opendeck) {
-        g_opendeck->set_brightness(DISPLAY_BRIGHTNESS); // Restore display brightness
+    if (g_productiondeck) {
+        g_productiondeck->set_brightness(DISPLAY_BRIGHTNESS); // Restore display brightness
     }
 }
 
@@ -153,10 +153,10 @@ void __attribute__((weak)) panic_handler(const char* msg) {
     printf("- Core: %d\n", get_core_num());
     printf("- Time: %lu us\n", time_us_32());
     
-    if (g_opendeck) {
-        printf("- USB connected: %s\n", g_opendeck->is_usb_connected() ? "yes" : "no");
-        printf("- Device ready: %s\n", g_opendeck->is_ready() ? "yes" : "no");
-        printf("- Uptime: %lu ms\n", g_opendeck->get_uptime_ms());
+    if (g_productiondeck) {
+        printf("- USB connected: %s\n", g_productiondeck->is_usb_connected() ? "yes" : "no");
+        printf("- Device ready: %s\n", g_productiondeck->is_ready() ? "yes" : "no");
+        printf("- Uptime: %lu ms\n", g_productiondeck->get_uptime_ms());
     }
     
     // Flash error pattern on status LED
@@ -239,11 +239,11 @@ void operator delete[](void* ptr) {
 extern "C" {
     
 const char build_info[] __attribute__((section(".build_info"))) = 
-    "OpenDeck v1.0 for RP2040\n"
+            "ProductionDeck v1.0 for RP2040\n"
     "Built: " __DATE__ " " __TIME__ "\n"
     "Compiler: " __VERSION__ "\n"
     "Target: StreamDeck Mini Compatible\n"
     "USB: " STRINGIFY(USB_VID) ":" STRINGIFY(USB_PID) "\n"
-    "GPIO: See opendeck_config.h\n";
+            "GPIO: See productiondeck_config.h\n";
 
 } // extern "C"

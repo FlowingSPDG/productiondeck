@@ -1,7 +1,7 @@
 #pragma once
 
 #include "tusb.h"
-#include "opendeck_config.h"
+#include "productiondeck_config.h"
 
 // ===================================================================
 // USB HID Descriptors for StreamDeck Mini Compatibility

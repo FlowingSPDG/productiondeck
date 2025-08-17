@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13)
 # NOTE: this must happen before project()
 include(pico_sdk_import.cmake)
 
-project(opendeck)
+project(productiondeck)
 
 # Initialize the SDK
 pico_sdk_init()
@@ -34,10 +34,10 @@ file(GLOB_RECURSE SOURCES
 )
 
 # Create executable
-add_executable(opendeck ${SOURCES})
+add_executable(productiondeck ${SOURCES})
 
 # Link libraries
-target_link_libraries(opendeck
+target_link_libraries(productiondeck
     pico_stdlib
     pico_unique_id
     pico_multicore
@@ -51,23 +51,24 @@ target_link_libraries(opendeck
 )
 
 # Enable USB output, disable UART output
-pico_enable_stdio_usb(opendeck 0)
-pico_enable_stdio_uart(opendeck 1)
+pico_enable_stdio_usb(productiondeck 0)
+pico_enable_stdio_uart(productiondeck 1)
 
 # Create map/bin/hex file etc.
-pico_add_extra_outputs(opendeck)
+pico_add_extra_outputs(productiondeck)
 
-# Copy built files to output directory
-add_custom_command(TARGET opendeck POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:opendeck>.uf2 ${CMAKE_CURRENT_BINARY_DIR}/output/
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:opendeck>.bin ${CMAKE_CURRENT_BINARY_DIR}/output/
-    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:opendeck>.hex ${CMAKE_CURRENT_BINARY_DIR}/output/
-    COMMENT "Copying output files to output directory"
-)
+# Copy built files to output directory (commented out for now)
+# add_custom_command(TARGET productiondeck POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:productiondeck> ${CMAKE_CURRENT_BINARY_DIR}/output/
+#     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:productiondeck>.uf2 ${CMAKE_CURRENT_BINARY_DIR}/output/
+#     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:productiondeck>.bin ${CMAKE_CURRENT_BINARY_DIR}/output/
+#     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:productiondeck>.hex ${CMAKE_CURRENT_BINARY_DIR}/output/
+#     COMMENT "Copying output files to output directory"
+# )
 
 # Print build information
 add_custom_target(info
-    COMMAND ${CMAKE_COMMAND} -E echo "=== OpenDeck Build Information ==="
+    COMMAND ${CMAKE_COMMAND} -E echo "=== ProductionDeck Build Information ==="
     COMMAND ${CMAKE_COMMAND} -E echo "Target: RP2040 (Raspberry Pi Pico)"
     COMMAND ${CMAKE_COMMAND} -E echo "USB VID: 0x0fd9 (Elgato)"
     COMMAND ${CMAKE_COMMAND} -E echo "USB PID: 0x0063 (StreamDeck Mini)"
@@ -83,10 +84,10 @@ add_custom_target(flash
     COMMAND ${CMAKE_COMMAND} -E echo "=== Flash Instructions ==="
     COMMAND ${CMAKE_COMMAND} -E echo "1. Hold BOOTSEL button on Pico"
     COMMAND ${CMAKE_COMMAND} -E echo "2. Connect USB cable"
-    COMMAND ${CMAKE_COMMAND} -E echo "3. Copy opendeck.uf2 to RPI-RP2 drive"
+    COMMAND ${CMAKE_COMMAND} -E echo "3. Copy productiondeck.uf2 to RPI-RP2 drive"
     COMMAND ${CMAKE_COMMAND} -E echo "4. Device will reboot automatically"
     COMMAND ${CMAKE_COMMAND} -E echo "=========================="
-    DEPENDS opendeck
+    DEPENDS productiondeck
 )
 
 # Clean target

@@ -1,7 +1,7 @@
 #pragma once
 
 // ===================================================================
-// OpenDeck Hardware Configuration
+// ProductionDeck Hardware Configuration
 // RP2040-based StreamDeck Alternative
 // ===================================================================
 
@@ -10,7 +10,7 @@
 #define USB_PID                 0x0063      // StreamDeck Mini PID
 #define USB_MANUFACTURER        "Elgato Systems"
 #define USB_PRODUCT             "Stream Deck Mini"
-#define USB_SERIAL              "OD240100001"  // OpenDeck serial format
+#define USB_SERIAL              "PD240100001"  // ProductionDeck serial format
 
 // Device Specifications (StreamDeck Mini)
 #define STREAMDECK_KEYS         6           // Number of keys (3x2 layout)

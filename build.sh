@@ -1,7 +1,7 @@
 #!/bin/bash
 # ===================================================================
-# OpenDeck Build Script
-# Simplified build process for OpenDeck firmware
+# ProductionDeck Build Script
+# Simplified build process for ProductionDeck firmware
 # ===================================================================
 
 set -e  # Exit on any error
@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Configuration
 BUILD_DIR="build"
 OUTPUT_DIR="build/output"
-PROJECT_NAME="opendeck"
+PROJECT_NAME="productiondeck"
 
 # Function to print colored output
 print_status() {
@@ -111,7 +111,7 @@ configure_cmake() {
 
 # Build firmware
 build_firmware() {
-    print_status "Building OpenDeck firmware..."
+    print_status "Building ProductionDeck firmware..."
     
     cd "$BUILD_DIR"
     make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
@@ -194,7 +194,7 @@ flash_firmware() {
 
 # Show usage information
 show_usage() {
-    echo "OpenDeck Build Script"
+    echo "ProductionDeck Build Script"
     echo "Usage: $0 [command]"
     echo ""
     echo "Commands:"
@@ -217,7 +217,7 @@ show_usage() {
 # Main script logic
 main() {
     echo "================================================"
-    echo "    OpenDeck - StreamDeck Alternative"
+    echo "    ProductionDeck - StreamDeck Alternative"
     echo "    RP2040 Firmware Build Script"
     echo "================================================"
     echo ""

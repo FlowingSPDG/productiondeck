@@ -12,18 +12,18 @@
 #include "hardware/watchdog.h"
 #include "tusb.h"
 
-#include "opendeck_config.h"
+#include "productiondeck_config.h"
 #include "usb_descriptors.h"
 
 // ===================================================================
-// OpenDeck Main Application Class
+// ProductionDeck Main Application Class
 // ===================================================================
 
-class OpenDeck {
+class ProductionDeck {
 public:
     // Constructor and basic lifecycle
-    OpenDeck();
-    ~OpenDeck();
+    ProductionDeck();
+    ~ProductionDeck();
     
     // Main application control
     bool initialize();
@@ -197,7 +197,7 @@ private:
 // ===================================================================
 
 // Main application instance
-extern OpenDeck* g_opendeck;
+extern ProductionDeck* g_productiondeck;
 
 // Callback functions for USB stack
 extern "C" {
@@ -240,5 +240,5 @@ extern "C" {
     } while(0)
 
 #define CHECK_INIT(component) \
-    ASSERT(state_.initialized, "OpenDeck not initialized"); \
+    ASSERT(state_.initialized, "ProductionDeck not initialized"); \
     ASSERT(component, #component " not ready")
