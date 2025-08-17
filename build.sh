@@ -95,9 +95,15 @@ configure_cmake() {
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
     
+    # Disable system mbedTLS to avoid conflicts with Pico SDK's mbedTLS
+    export C_INCLUDE_PATH=""
+    export CPATH=""
+    
     cmake .. \
         -DPICO_SDK_PATH="$PICO_SDK_PATH" \
-        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS="-I$PICO_SDK_PATH/lib/mbedtls/include" \
+        -DCMAKE_CXX_FLAGS="-I$PICO_SDK_PATH/lib/mbedtls/include"
     
     cd ..
     print_success "CMake configuration complete"

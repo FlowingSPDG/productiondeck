@@ -13,6 +13,13 @@ pico_sdk_init()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Force use of Pico SDK's mbedTLS instead of system mbedTLS
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -I${PICO_SDK_PATH}/lib/mbedtls/include")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${PICO_SDK_PATH}/lib/mbedtls/include")
+
+# Disable system mbedTLS headers
+add_compile_definitions(MBEDTLS_CONFIG_FILE="${PICO_SDK_PATH}/lib/mbedtls/include/mbedtls/config.h")
+
 # Create directories for build outputs
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/output)
 
