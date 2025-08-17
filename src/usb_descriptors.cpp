@@ -8,6 +8,10 @@
 
 #include "usb_descriptors.h"
 #include "tusb.h"
+#include "opendeck.h"
+
+// Global OpenDeck instance (declared in main.cpp)
+extern OpenDeck* g_opendeck;
 
 // ===================================================================
 // USB Device Descriptor
@@ -90,7 +94,7 @@ const uint8_t desc_configuration[] = {
     
     // HID Descriptor
     TUD_HID_DESCRIPTOR(ITF_NUM_HID, 0, HID_ITF_PROTOCOL_NONE, 
-                       sizeof(desc_hid_report), USB_HID_EP_OUT, USB_HID_EP_IN, 
+                       sizeof(desc_hid_report), USB_HID_EP_IN, 
                        CFG_TUD_HID_EP_BUFSIZE, 1)
 };
 
@@ -239,11 +243,21 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
             }
             break;
             
-        case FEATURE_REPORT_RESET_V2:
-            // V2 Reset: [0x03, 0x02, ...]
-            if (bufsize >= 2 && buffer[1] == 0x02) {
-                printf("USB: Reset command (V2)\n");
-                g_opendeck->reset_device();
+        case 0x03: // FEATURE_REPORT_RESET_V2 and FEATURE_REPORT_BRIGHTNESS_V2
+            // V2 commands: [0x03, command_byte, ...]
+            if (bufsize >= 2) {
+                if (buffer[1] == 0x02) {
+                    // V2 Reset: [0x03, 0x02, ...]
+                    printf("USB: Reset command (V2)\n");
+                    g_opendeck->reset_device();
+                } else if (buffer[1] == 0x08) {
+                    // V2 Brightness: [0x03, 0x08, brightness, ...]
+                    if (bufsize >= 3) {
+                        uint8_t brightness = buffer[2];
+                        printf("USB: Set brightness %d%% (V2)\n", brightness);
+                        g_opendeck->set_brightness(brightness);
+                    }
+                }
             }
             break;
             
@@ -253,15 +267,6 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
                 buffer[3] == 0xD1 && buffer[4] == 0x01) {
                 uint8_t brightness = buffer[5];
                 printf("USB: Set brightness %d%% (V1)\n", brightness);
-                g_opendeck->set_brightness(brightness);
-            }
-            break;
-            
-        case FEATURE_REPORT_BRIGHTNESS_V2:
-            // V2 Brightness: [0x03, 0x08, brightness, ...]
-            if (bufsize >= 3 && buffer[1] == 0x08) {
-                uint8_t brightness = buffer[2];
-                printf("USB: Set brightness %d%% (V2)\n", brightness);
                 g_opendeck->set_brightness(brightness);
             }
             break;

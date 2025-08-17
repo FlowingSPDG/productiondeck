@@ -25,6 +25,7 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/output)
 
 # Include directories
 include_directories(include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # Collect all source files
 file(GLOB_RECURSE SOURCES

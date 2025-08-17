@@ -233,6 +233,9 @@ void operator delete[](void* ptr) {
 // Build Information (embedded in binary)
 // ===================================================================
 
+// Stringify macro for build info
+#define STRINGIFY(x) #x
+
 extern "C" {
     
 const char build_info[] __attribute__((section(".build_info"))) = 
@@ -244,6 +247,3 @@ const char build_info[] __attribute__((section(".build_info"))) =
     "GPIO: See opendeck_config.h\n";
 
 } // extern "C"
-
-// Stringify macro for build info
-#define STRINGIFY(x) #x

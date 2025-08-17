@@ -25,12 +25,13 @@ extern const char* string_desc_arr[];
 // HID Report IDs and Types (StreamDeck Protocol)
 // ===================================================================
 
-// Report Types
-typedef enum {
-    HID_REPORT_TYPE_INPUT = 1,
-    HID_REPORT_TYPE_OUTPUT = 2,
-    HID_REPORT_TYPE_FEATURE = 3
-} hid_report_type_t;
+// Report Types (using TinyUSB definitions)
+// Note: These are already defined in TinyUSB's hid.h
+// typedef enum {
+//     HID_REPORT_TYPE_INPUT = 1,
+//     HID_REPORT_TYPE_OUTPUT = 2,
+//     HID_REPORT_TYPE_FEATURE = 3
+// } hid_report_type_t;
 
 // Feature Report Commands (StreamDeck Protocol)
 #define FEATURE_REPORT_VERSION_V1       0x04    // Get firmware version (V1)

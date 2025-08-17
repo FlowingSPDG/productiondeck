@@ -218,8 +218,7 @@ extern "C" {
 
 // Utility macros
 #define ARRAY_SIZE(a)           (sizeof(a) / sizeof(a[0]))
-#define MIN(a, b)              ((a) < (b) ? (a) : (b))
-#define MAX(a, b)              ((a) > (b) ? (a) : (b))
+// MIN and MAX are already defined by Pico SDK
 #define CLAMP(x, min, max)     (MIN(MAX(x, min), max))
 
 // Debug macros
@@ -242,4 +241,4 @@ extern "C" {
 
 #define CHECK_INIT(component) \
     ASSERT(state_.initialized, "OpenDeck not initialized"); \
-    ASSERT(component, #component " not ready");
+    ASSERT(component, #component " not ready")
