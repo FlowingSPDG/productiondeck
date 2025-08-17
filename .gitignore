@@ -1,0 +1,122 @@
+# CMake build files
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!pico_sdk_import.cmake
+
+# Build outputs
+*.uf2
+*.bin
+*.hex
+*.elf
+*.map
+*.dis
+*.elf.map
+
+# Output directory
+output/
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+.vs/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python files (if using scripts)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Debug files
+*.gdb
+*.dSYM/
+
+# Log files
+*.log
+
+# Hardware design files (keep source, ignore outputs)
+hardware/*.bak
+hardware/*-backups/
+hardware/*.net
+hardware/*.pro
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dependencies
+node_modules/
+bower_components/
+
+# Compiled Object files
+*.o
+*.obj
+
+# Archives
+*.a
+*.lib
+
+# Shared objects
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+
+# Package files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
