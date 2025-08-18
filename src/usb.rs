@@ -238,23 +238,25 @@ impl StreamDeckHidHandler {
 #[embassy_executor::task]
 pub async fn usb_task(
     driver: Driver<'static, peripherals::USB>,
-    usb_led_pin: peripherals::PIN_20,
+    mut usb_led: Output<'static>,
 ) {
     info!("USB task started");
-
-    let mut usb_led = Output::new(usb_led_pin, Level::Low);
 
     // Create USB configuration
     let config = create_usb_config();
 
     // Create USB builder
+    let mut device_desc_buf = [0; 256];
+    let mut config_desc_buf = [0; 256];
+    let mut bos_desc_buf = [0; 256];
+    let mut control_buf = [0; 128];
     let mut builder = Builder::new(
         driver,
         config,
-        &mut [0; 256],  // Device descriptor buffer
-        &mut [0; 256],  // Config descriptor buffer
-        &mut [0; 256],  // BOS descriptor buffer
-        &mut [0; 128],  // Control buffer
+        &mut device_desc_buf,  // Device descriptor buffer
+        &mut config_desc_buf,  // Config descriptor buffer
+        &mut bos_desc_buf,     // BOS descriptor buffer
+        &mut control_buf,      // Control buffer
     );
 
     // Create HID request handler

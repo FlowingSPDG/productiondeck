@@ -4,7 +4,7 @@
 //! and sends button state changes to the USB task.
 
 use defmt::*;
-use embassy_rp::gpio::{Input, Output, Level, Pull};
+use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pin, Pull};
 use embassy_rp::Peri;
 use embassy_rp::peripherals;
 use embassy_time::{Duration, Timer, Instant};
@@ -72,21 +72,21 @@ struct ButtonMatrix {
 
 impl ButtonMatrix {
     fn new(
-        row_pin_0: peripherals::PIN_2,
-        row_pin_1: peripherals::PIN_3,
-        col_pin_0: peripherals::PIN_4,
-        col_pin_1: peripherals::PIN_5,
-        col_pin_2: peripherals::PIN_6,
+        row_pin_0: Output<'static>,
+        row_pin_1: Output<'static>,
+        col_pin_0: Input<'static>,
+        col_pin_1: Input<'static>,
+        col_pin_2: Input<'static>,
     ) -> Self {
         let rows = [
-            Output::new(row_pin_0, Level::High),
-            Output::new(row_pin_1, Level::High),
+            row_pin_0,
+            row_pin_1,
         ];
 
         let cols = [
-            Input::new(col_pin_0, Pull::Up),
-            Input::new(col_pin_1, Pull::Up),
-            Input::new(col_pin_2, Pull::Up),
+            col_pin_0,
+            col_pin_1,
+            col_pin_2,
         ];
 
         Self { rows, cols }
@@ -123,15 +123,21 @@ impl ButtonMatrix {
 
 #[embassy_executor::task]
 pub async fn button_task(
-    pin2: peripherals::PIN_2,
-    pin3: peripherals::PIN_3,
-    pin4: peripherals::PIN_4,
-    pin5: peripherals::PIN_5,
-    pin6: peripherals::PIN_6,
+    row0: Output<'static>,
+    row1: Output<'static>,
+    col0: Input<'static>,
+    col1: Input<'static>,
+    col2: Input<'static>,
 ) {
     info!("Button task started");
 
-    let mut matrix = ButtonMatrix::new(pin2, pin3, pin4, pin5, pin6);
+    let mut matrix = ButtonMatrix::new(
+        row0,
+        row1,
+        col0,
+        col1,
+        col2,
+    );
     let mut debouncer = ButtonDebouncer::new();
     let mut last_button_state = ButtonState {
         buttons: [false; STREAMDECK_KEYS],
@@ -188,20 +194,20 @@ struct DirectButtons {
 #[allow(dead_code)]
 impl DirectButtons {
     fn new(
-        pin2: peripherals::PIN_2,
-        pin3: peripherals::PIN_3,
-        pin4: peripherals::PIN_4,
-        pin5: peripherals::PIN_5,
-        pin6: peripherals::PIN_6,
-        pin7: peripherals::PIN_7,
+        pin2: embassy_rp::gpio::Input<'static>,
+        pin3: embassy_rp::gpio::Input<'static>,
+        pin4: embassy_rp::gpio::Input<'static>,
+        pin5: embassy_rp::gpio::Input<'static>,
+        pin6: embassy_rp::gpio::Input<'static>,
+        pin7: embassy_rp::gpio::Input<'static>,
     ) -> Self {
-        let buttons = [
-            Input::new(pin2, Pull::Up),
-            Input::new(pin3, Pull::Up),
-            Input::new(pin4, Pull::Up),
-            Input::new(pin5, Pull::Up),
-            Input::new(pin6, Pull::Up),
-            Input::new(pin7, Pull::Up),
+        let buttons: [Input<'static>; STREAMDECK_KEYS] = [
+            pin2,
+            pin3,
+            pin4,
+            pin5,
+            pin6,
+            pin7,
         ];
 
         Self { buttons }
