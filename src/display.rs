@@ -3,6 +3,8 @@
 //! This module manages a single 216x144 display divided into 6 regions (72x72 each)
 //! to simulate individual key displays like the StreamDeck Mini.
 
+#![allow(dead_code)]
+
 use defmt::*;
 use embassy_rp::gpio::Output;
 use embassy_rp::peripherals;
