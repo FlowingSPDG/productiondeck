@@ -15,7 +15,8 @@
       "mcp__serena__find_file",
       "WebFetch(domain:docs.embassy.dev)",
       "WebFetch(domain:github.com)",
-      "mcp__serena__think_about_collected_information"
+      "mcp__serena__think_about_collected_information",
+      "Bash(cargo build:*)"
     ],
     "deny": [
       "Bash(git add:*)"

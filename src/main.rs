@@ -21,6 +21,7 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
 use heapless::Vec;
 use panic_halt as _;
+use defmt_rtt as _; // global logger
 
 mod config;
 mod usb;
