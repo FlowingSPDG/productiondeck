@@ -31,32 +31,13 @@ struct DisplayController {
 
 impl DisplayController {
     async fn new(
-        spi0: peripherals::SPI0,
-        sck_pin: peripherals::PIN_18,
-        mosi_pin: peripherals::PIN_19,
-        cs_pin: peripherals::PIN_8,
-        dc_pin: peripherals::PIN_14,
-        rst_pin: peripherals::PIN_15,
-        bl_pin: peripherals::PIN_17,
+        spi: Spi<'static, peripherals::SPI0, embassy_rp::spi::Blocking>,
+        cs: Output<'static>,
+        dc: Output<'static>,
+        rst: Output<'static>,
+        bl: Output<'static>,
     ) -> Self {
         info!("Initializing display controller");
-
-        // Configure SPI
-        let mut spi_config = SpiConfig::default();
-        spi_config.frequency = SPI_BAUDRATE;
-        spi_config.phase = Phase::CaptureOnFirstTransition;
-        spi_config.polarity = Polarity::IdleLow;
-
-        // MISO pin not needed for display-only SPI
-        let spi = Spi::new_blocking_txonly(spi0, sck_pin, mosi_pin, spi_config);
-
-        // Configure control pins
-        let cs = Output::new(cs_pin, Level::High); // CS high = deselected
-        let dc = Output::new(dc_pin, Level::Low); // DC low = command mode
-        let rst = Output::new(rst_pin, Level::High); // RST high = not reset
-
-        // Configure backlight as simple GPIO output for now (TODO: add PWM)
-        let _backlight = Output::new(bl_pin, Level::High); // Turn on backlight
 
         let mut controller = Self {
             spi,
@@ -382,18 +363,16 @@ impl ImageBuffer {
 
 #[embassy_executor::task]
 pub async fn display_task(
-    spi0: peripherals::SPI0,
-    sck_pin: peripherals::PIN_18,
-    mosi_pin: peripherals::PIN_19,
-    cs_pin: peripherals::PIN_8,
-    dc_pin: peripherals::PIN_14,
-    rst_pin: peripherals::PIN_15,
-    bl_pin: peripherals::PIN_17,
+    spi: embassy_rp::spi::Spi<'static, peripherals::SPI0, embassy_rp::spi::Blocking>,
+    cs: Output<'static>,
+    dc: Output<'static>,
+    rst: Output<'static>,
+    bl: Output<'static>,
 ) {
     info!("Display task started");
 
     let mut controller = DisplayController::new(
-        spi0, sck_pin, mosi_pin, cs_pin, dc_pin, rst_pin, bl_pin
+        spi, cs, dc, rst, bl
     ).await;
 
     let mut image_buffers: [ImageBuffer; STREAMDECK_KEYS] = Default::default();

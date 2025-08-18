@@ -260,15 +260,16 @@ pub async fn usb_task(
     );
 
     // Create HID request handler
-    let mut request_handler = StreamDeckHidHandler::new();
-    
-    // Create HID class
-    let hid_config = HidConfig {
-        report_descriptor: HID_REPORT_DESCRIPTOR,
-        request_handler: Some(&mut request_handler),
-        poll_ms: USB_POLL_RATE_MS as u8,
-        max_packet_size: 64,
-    };
+    static mut REQUEST_HANDLER: Option<StreamDeckHidHandler> = None;
+    unsafe {
+        REQUEST_HANDLER = Some(StreamDeckHidHandler::new());
+        let hid_config = HidConfig {
+            report_descriptor: HID_REPORT_DESCRIPTOR,
+            request_handler: REQUEST_HANDLER.as_mut().map(|h| h as _),
+            poll_ms: USB_POLL_RATE_MS as u8,
+            max_packet_size: 64,
+        };
+    }
 
     let mut hid_state = State::new();
     let hid = HidReaderWriter::<_, 64, 64>::new(&mut builder, &mut hid_state, hid_config);
