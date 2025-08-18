@@ -9,7 +9,9 @@ pub const USB_VID: u16 = 0x0fd9; // Elgato Systems VID
 pub const USB_PID: u16 = 0x0063; // StreamDeck Mini PID
 pub const USB_MANUFACTURER: &str = "Elgato Systems";
 pub const USB_PRODUCT: &str = "Stream Deck Mini";
-pub const USB_SERIAL: &str = "PD240100001"; // ProductionDeck serial format
+// Serial is provided at compile-time from build.rs as an env var; fallback to a static value if missing.
+// Use a fixed 12-character uppercase alphanumeric serial to match real device length
+pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
 
 // USB version settings to match real StreamDeck Mini
 pub const USB_BCD_VERSION: u16 = 0x0200; // USB 2.0 (matches real device)

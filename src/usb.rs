@@ -230,153 +230,234 @@ struct StreamDeckHidHandler {
 }
 
 impl RequestHandler for StreamDeckHidHandler {
-    fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
-        info!("HID Get Report: ID={:?}", id);
-        
-        match id {
-            ReportId::In(_) => {
-                // Button state will be sent via separate input reports
-                None
-            }
-            ReportId::Feature(report_id) => {
-                // Handle feature report requests for StreamDeck Mini
-                match report_id {
-                    0x03 | 0x04 | 0x05 | 0x07 | 0x0b | 0xa0 | 0xa1 | 0xa2 => {
-                        // StreamDeck Mini feature reports - return 16 bytes
-                        _buf[0] = report_id;
-                        // Fill remaining 15 bytes with zeros
-                        for i in 1..16 {
-                            _buf[i] = 0x00;
-                        }
-                        Some(16)
-                    }
-                    _ => {
-                        warn!("Unknown feature report ID: 0x{:02x}", report_id);
-                        None
-                    }
-                }
-            }
-            _ => None,
-        }
-    }
+			fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
+			info!("HID Get Report: ID={:?}, buf_len={}", id, _buf.len());
+			// Debug: Log all incoming requests to see what's actually being received
+			match id {
+				ReportId::Feature(report_id) => {
+					info!("DEBUG: Feature Report request for ID 0x{:02X}", report_id);
+				}
+				_ => {
+					info!("DEBUG: Non-feature report request: {:?}", id);
+				}
+			}
+		
+		match id {
+			ReportId::In(_) => {
+				// Button state will be sent via separate input reports
+				None
+			}
+			ReportId::Feature(report_id) => {
+				// Handle feature report requests for StreamDeck Mini
+				match report_id {
+					0x05 => {
+						// Compatibility: read firmware via GET_REPORT 0x05
+						let total_len = 32.min(_buf.len());
+						for i in 0..total_len { _buf[i] = 0x00; }
+						_buf[0] = report_id;
+						_buf[1] = 0x0c; // Length
+						_buf[2] = 0x31; // Type
+						_buf[3] = 0x33; // Type
+						_buf[4] = 0x00; // Null terminator
+						let version = b"3.00.000";
+						let start = 5;
+						let end = (start + version.len()).min(total_len);
+						_buf[start..end].copy_from_slice(&version[..(end - start)]);
+						info!("HID Get Report 0x05: returning {} bytes, version='3.00.000'", total_len);
+						Some(total_len)
+					}
+					0xa1 => {
+						// Report ID 0xA1 - Firmware Version response (32 bytes)
+						// Match real device: 32 bytes response with header and ASCII version
+						let total_len = 32.min(_buf.len());
+						for i in 0..total_len { _buf[i] = 0x00; }
+						_buf[0] = report_id;
+						_buf[1] = 0x0c; // Length
+						_buf[2] = 0x31; // Type
+						_buf[3] = 0x33; // Type
+						_buf[4] = 0x00; // Null terminator
+						// Firmware version: "3.00.000"
+						let version = b"3.00.000";
+						let start = 5;
+						let end = (start + version.len()).min(total_len);
+						_buf[start..end].copy_from_slice(&version[..(end - start)]);
+						info!("HID Get Report 0xA1: returning {} bytes, version='3.00.000'", total_len);
+						Some(total_len)
+					}
+					0x04 => {
+						// Firmware Version request (V1 path used by some hosts/tools)
+						// Return 17 bytes. Bytes [5..] contain ASCII version
+						let version = b"3.00.000";
+						let total_len = 17.min(_buf.len());
+						for i in 0..total_len { _buf[i] = 0x00; }
+						_buf[0] = report_id;
+						let start = 5; // V1 offset
+						let end = (start + version.len()).min(total_len);
+						_buf[start..end].copy_from_slice(&version[..(end - start)]);
+						Some(total_len)
+					}
+					0x03 => {
+						// Report ID 0x03 - Serial Number response (32 bytes)
+						// Real device format: [0x03, 0x0c, 0x31, 0x33, 0x00, "BL15K1B42102", ...]
+						// Our format: [0x03, 0x0c, 0x31, 0x33, 0x00, "PRODUCTIONDK", ...]
+						let total_len = 32.min(_buf.len());
+						for i in 0..total_len { _buf[i] = 0x00; }
+						_buf[0] = report_id;
+						_buf[1] = 0x0c; // Length
+						_buf[2] = 0x31; // Type
+						_buf[3] = 0x33; // Type
+						_buf[4] = 0x00; // Null terminator
+						// Serial number: "PRODUCTIONDK" (12 chars)
+						let serial = b"PRODUCTIONDK";
+						let start = 5;
+						let end = (start + serial.len()).min(total_len);
+						_buf[start..end].copy_from_slice(&serial[..(end - start)]);
+						info!("HID Get Report 0x03: returning {} bytes, serial='PRODUCTIONDK'", total_len);
+						Some(total_len)
+					}
+					0x07 | 0x0b | 0xa0 | 0xa2 => {
+						// StreamDeck Mini feature reports - return 16 bytes
+						let total_len = 16.min(_buf.len());
+						for i in 0..total_len { _buf[i] = 0x00; }
+						_buf[0] = report_id;
+						Some(total_len)
+					}
+					_ => {
+						warn!("Unknown feature report ID: 0x{:02x}", report_id);
+						None
+					}
+				}
+			}
+			_ => None,
+		}
+	}
 
-    fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
-        info!("HID Set Report: ID={:?}, len={}", id, data.len());
-        
-        match id {
-            ReportId::Feature(report_id) => {
-                self.handle_feature_report(report_id, data);
-            }
-            ReportId::Out(_) => {
-                self.handle_output_report(data);
-            }
-            _ => {}
-        }
-        
-        OutResponse::Accepted
-    }
+	fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
+		info!("HID Set Report: ID={:?}, len={}", id, data.len());
+		
+		match id {
+			ReportId::Feature(report_id) => {
+				self.handle_feature_report(report_id, data);
+			}
+			ReportId::Out(_) => {
+				self.handle_output_report(data);
+			}
+			_ => {}
+		}
+		
+		OutResponse::Accepted
+	}
 }
 
 impl StreamDeckHidHandler {
-    fn new() -> Self {
-        Self {
-            usb_command_sender: USB_COMMAND_CHANNEL.sender(),
-        }
-    }
+	fn new() -> Self {
+		Self {
+			usb_command_sender: USB_COMMAND_CHANNEL.sender(),
+		}
+	}
 
-    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) {
-        match report_id {
-            0x00 => {
-                // Feature Report ID 0x00 - StreamDeck initialization command
-                // This is likely a device initialization or status request
-                info!("USB: Feature Report 0x00 received (initialization)");
-                // Respond with success - this is critical for StreamDeck software recognition
-                debug!("Feature Report 0x00 data: {:?}", data);
-            }
-            FEATURE_REPORT_RESET_V1 => {
-                // V1 Reset: [0x0B, 0x63, ...]
-                if data.len() >= 2 && data[1] == 0x63 {
-                    info!("USB: Reset command (V1)");
-                    let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
-                }
-            }
-            0x03 => {
-                // V2 commands: [0x03, command_byte, ...]
-                if data.len() >= 2 {
-                    match data[1] {
-                        0x02 => {
-                            // V2 Reset: [0x03, 0x02, ...]
-                            info!("USB: Reset command (V2)");
-                            let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
-                        }
-                        0x08 => {
-                            // V2 Brightness: [0x03, 0x08, brightness, ...]
-                            if data.len() >= 3 {
-                                let brightness = data[2];
-                                info!("USB: Set brightness {}% (V2)", brightness);
-                                let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
-                            }
-                        }
-                        _ => {
-                            warn!("Unknown V2 command: 0x{:02X}", data[1]);
-                        }
-                    }
-                }
-            }
-            FEATURE_REPORT_BRIGHTNESS_V1 => {
-                // V1 Brightness: [0x05, 0x55, 0xAA, 0xD1, 0x01, brightness, ...]
-                if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
-                   data[3] == 0xD1 && data[4] == 0x01 {
-                    let brightness = data[5];
-                    info!("USB: Set brightness {}% (V1)", brightness);
-                    let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
-                }
-            }
-            _ => {
-                warn!("Unknown feature report ID: 0x{:02X}", report_id);
-            }
-        }
-    }
+	fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) {
+		match report_id {
+			0x00 => {
+				// Feature Report ID 0x00 - StreamDeck initialization command
+				// This is likely a device initialization or status request
+				info!("USB: Feature Report 0x00 received (initialization)");
+				// Respond with success - this is critical for StreamDeck software recognition
+				debug!("Feature Report 0x00 data: {:?}", data);
+			}
+			FEATURE_REPORT_RESET_V1 => {
+				// V1 Reset: [0x0B, 0x63, ...] - Legacy support for old software
+				if data.len() >= 2 && data[1] == 0x63 {
+					info!("USB: Reset command (V1 - Legacy)");
+					let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+				}
+			}
+			0x03 => {
+				// V2 commands: [0x03, command_byte, ...]
+				if data.len() >= 2 {
+					match data[1] {
+						0x02 => {
+							// V2 Reset: [0x03, 0x02, ...]
+							info!("USB: Reset command (V2)");
+							let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+						}
+						0x08 => {
+							// V2 Brightness: [0x03, 0x08, brightness, ...]
+							if data.len() >= 3 {
+								let brightness = data[2];
+								info!("USB: Set brightness {}% (V2)", brightness);
+								let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+							}
+						}
+						_ => {
+							warn!("Unknown V2 command: 0x{:02X}", data[1]);
+						}
+					}
+				}
+			}
+			FEATURE_REPORT_BRIGHTNESS_V1 => {
+				// V1 Brightness: [0x05, 0x55, 0xAA, 0xD1, 0x01, brightness, ...]
+				if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
+				   data[3] == 0xD1 && data[4] == 0x01 {
+					let brightness = data[5];
+					info!("USB: Set brightness {}% (V1)", brightness);
+					let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+				}
+			}
+			0x05 => {
+				// Report ID 0x05 - Reset command (V1)
+				// Format: [0x05, 0x55, 0xAA, 0xD1, 0x01, 0x3e, ...]
+				if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
+				   data[3] == 0xD1 && data[4] == 0x01 && data[5] == 0x3e {
+					info!("USB: Reset command (V1 - Report ID 0x05)");
+					let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+				}
+			}
+			_ => {
+				warn!("Unknown feature report ID: 0x{:02X}", report_id);
+			}
+		}
+	}
+	
+	fn handle_output_report(&mut self, data: &[u8]) {
+		if data.len() < 8 {
+			warn!("Invalid output report length: {}", data.len());
+			return;
+		}
 
-    fn handle_output_report(&mut self, data: &[u8]) {
-        if data.len() < 8 {
-            warn!("Invalid output report length: {}", data.len());
-            return;
-        }
+		debug!("USB Output Report: {} bytes received", data.len());
+		debug!("Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
+			   data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
 
-        debug!("USB Output Report: {} bytes received", data.len());
-        debug!("Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
-               data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
-
-        // Parse output report header (StreamDeck Mini V2 protocol)
-        if data[0] == OUTPUT_REPORT_IMAGE && data[1] == IMAGE_COMMAND_V2 {
-            // V2 Image protocol: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
-            let key_id = data[2];
-            let _is_last = data[3];
-            let payload_len = u16::from_le_bytes([data[4], data[5]]);
-            let _sequence = u16::from_le_bytes([data[6], data[7]]);
-
-            debug!("Image packet: key={} seq={} len={} last={}", 
-                   key_id, _sequence, payload_len, _is_last);
-
-            if key_id < STREAMDECK_KEYS as u8 {
-                // Convert slice to heapless Vec
-                let mut image_data = Vec::new();
-                if image_data.extend_from_slice(data).is_ok() {
-                    let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { 
-                        key_id, 
-                        data: image_data 
-                    });
-                } else {
-                    error!("Failed to copy image data to buffer");
-                }
-            } else {
-                error!("Invalid key_id {} (max {})", key_id, STREAMDECK_KEYS - 1);
-            }
-        } else {
-            debug!("Unknown output report format: [0x{:02X}, 0x{:02X}]", data[0], data[1]);
-        }
-    }
+		// Parse output report header (StreamDeck Mini V2 protocol)
+		if data[0] == OUTPUT_REPORT_IMAGE && data[1] == IMAGE_COMMAND_V2 {
+			// V2 Image protocol: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
+			let key_id = data[2];
+			let _is_last = data[3];
+			let payload_len = u16::from_le_bytes([data[4], data[5]]);
+			let _sequence = u16::from_le_bytes([data[6], data[7]]);
+			
+			debug!("Image packet: key={} seq={} len={} last={}", 
+				   key_id, _sequence, payload_len, _is_last);
+			
+			if key_id < STREAMDECK_KEYS as u8 {
+				// Convert slice to heapless Vec
+				let mut image_data = Vec::new();
+				if image_data.extend_from_slice(data).is_ok() {
+					let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { 
+						key_id, 
+						data: image_data 
+					});
+				} else {
+					error!("Failed to copy image data to buffer");
+				}
+			} else {
+				error!("Invalid key_id {} (max {})", key_id, STREAMDECK_KEYS - 1);
+			}
+		} else {
+			debug!("Unknown output report format: [0x{:02X}, 0x{:02X}]", data[0], data[1]);
+		}
+	}
 }
 
 // ===================================================================
