@@ -21,45 +21,18 @@ use crate::{BUTTON_CHANNEL, USB_COMMAND_CHANNEL, DISPLAY_CHANNEL, UsbCommand, Di
 // ===================================================================
 
 const HID_REPORT_DESCRIPTOR: &[u8] = &[
-    // Usage Page (Generic Desktop)
-    0x05, 0x01,
-    // Usage (Undefined)
-    0x09, 0x00,
-    // Collection (Application)
-    0xa1, 0x01,
-    
-    // ===============================================
-    // Input Report (Button States: Device → Host)
-    // ===============================================
-    0x09, 0x00,                         // Usage (Undefined)
-    0x15, 0x00,                         // Logical Minimum (0)
-    0x25, 0x01,                         // Logical Maximum (1)
-    0x75, 0x08,                         // Report Size (8 bits)
-    0x95, STREAMDECK_KEYS as u8,        // Report Count (6 buttons)
-    0x81, 0x02,                         // Input (Data, Variable, Absolute)
-    
-    // ===============================================
-    // Output Report (Image Data: Host → Device)
-    // ===============================================
-    0x09, 0x00,                         // Usage (Undefined)
-    0x15, 0x00,                         // Logical Minimum (0)
-    0x26, 0xFF, 0x00,                   // Logical Maximum (255)
-    0x75, 0x08,                         // Report Size (8 bits)
-    0x96, 0x00, 0x04,                   // Report Count (1024 bytes)
-    0x91, 0x02,                         // Output (Data, Variable, Absolute)
-    
-    // ===============================================
-    // Feature Report (Commands: Bidirectional)
-    // ===============================================
-    0x09, 0x00,                         // Usage (Undefined)
-    0x15, 0x00,                         // Logical Minimum (0)
-    0x26, 0xFF, 0x00,                   // Logical Maximum (255)
-    0x75, 0x08,                         // Report Size (8 bits)
-    0x95, HID_REPORT_SIZE_FEATURE as u8, // Report Count (32 bytes)
-    0xb1, 0x02,                         // Feature (Data, Variable, Absolute)
-    
-    // End Collection
-    0xc0
+    // Real StreamDeck Mini HID Report Descriptor (exact copy)
+    0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01, 0x09, 0x01, 0x05, 0x09, 0x19, 0x01, 0x29, 0x10, 0x15, 0x00,
+    0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x01, 0x81, 0x02, 0x0a, 0x00, 0xff, 0x15, 0x00,
+    0x26, 0xff, 0x00, 0x75, 0x08, 0x96, 0xff, 0x03, 0x85, 0x02, 0x91, 0x02, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x03, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x04, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x05, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x07, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0x0b, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0xa0, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0xa1, 0xb1, 0x04, 0x0a, 0x00, 0xff, 0x15,
+    0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x10, 0x85, 0xa2, 0xb1, 0x04, 0xc0
 ];
 
 // ===================================================================
@@ -73,10 +46,14 @@ fn create_usb_config() -> Config<'static> {
     config.serial_number = Some(USB_SERIAL);
     config.max_power = 100; // 200mA
     config.max_packet_size_0 = 64;
-    config.device_class = 0x00; // Interface-defined
+    config.device_class = 0x00; // Interface-defined (HID class will be set in interface)
     config.device_sub_class = 0x00;
     config.device_protocol = 0x00;
     config.composite_with_iads = false;
+    
+    // Set device version to match real StreamDeck Mini
+    config.device_release = USB_BCD_DEVICE;
+    
     config
 }
 
@@ -98,19 +75,22 @@ impl RequestHandler for StreamDeckHidHandler {
                 None
             }
             ReportId::Feature(report_id) => {
-                // Handle feature report requests (version, etc.)
-                if report_id == FEATURE_REPORT_VERSION_V1 || report_id == FEATURE_REPORT_VERSION_V2 {
-                    // Version request - return firmware version
-                    _buf[0] = report_id;
-                    let offset = if report_id == FEATURE_REPORT_VERSION_V2 { 6 } else { 5 };
-                    let version = b"1.0.0";
-                    
-                    if _buf.len() > offset + version.len() {
-                        _buf[offset..offset + version.len()].copy_from_slice(version);
-                        return Some(HID_REPORT_SIZE_FEATURE);
+                // Handle feature report requests for StreamDeck Mini
+                match report_id {
+                    0x03 | 0x04 | 0x05 | 0x07 | 0x0b | 0xa0 | 0xa1 | 0xa2 => {
+                        // StreamDeck Mini feature reports - return 16 bytes
+                        _buf[0] = report_id;
+                        // Fill remaining 15 bytes with zeros
+                        for i in 1..16 {
+                            _buf[i] = 0x00;
+                        }
+                        Some(16)
+                    }
+                    _ => {
+                        warn!("Unknown feature report ID: 0x{:02x}", report_id);
+                        None
                     }
                 }
-                None
             }
             _ => None,
         }
@@ -142,6 +122,13 @@ impl StreamDeckHidHandler {
 
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) {
         match report_id {
+            0x00 => {
+                // Feature Report ID 0x00 - StreamDeck initialization command
+                // This is likely a device initialization or status request
+                info!("USB: Feature Report 0x00 received (initialization)");
+                // Respond with success - this is critical for StreamDeck software recognition
+                debug!("Feature Report 0x00 data: {:?}", data);
+            }
             FEATURE_REPORT_RESET_V1 => {
                 // V1 Reset: [0x0B, 0x63, ...]
                 if data.len() >= 2 && data[1] == 0x63 {
@@ -269,8 +256,12 @@ pub async fn usb_task(
         #[allow(static_mut_refs)]
         request_handler: unsafe { REQUEST_HANDLER.as_mut().map(|h| h as _) },
         poll_ms: USB_POLL_RATE_MS as u8,
-        max_packet_size: 64,
+        max_packet_size: 64, // RP2040 USB hardware limitation
     };
+    
+    info!("HID configuration created with report descriptor size: {} bytes", HID_REPORT_DESCRIPTOR.len());
+    
+    // HID class is automatically added when creating HidReaderWriter
 
     static mut HID_STATE: State = State::new();
     #[allow(static_mut_refs)]
@@ -285,8 +276,9 @@ pub async fn usb_task(
     // Spawn USB device task
     let usb_fut = usb.run();
 
-    // Spawn USB command processor
+    // Spawn USB command processor (temporarily disabled - no commands being sent)
     let command_fut = async {
+        info!("USB command processor started (waiting for commands)");
         let receiver = USB_COMMAND_CHANNEL.receiver();
         loop {
             match receiver.receive().await {
@@ -318,10 +310,13 @@ pub async fn usb_task(
         loop {
             let button_state = receiver.receive().await;
             if button_state.changed {
-                // Convert button state to HID report format
-                let mut report = [0u8; STREAMDECK_KEYS];
+                // Convert button state to HID report format (Report ID 0x01, 16 bytes)
+                let mut report = [0u8; 16];
+                report[0] = 0x01; // Report ID
                 for (i, &pressed) in button_state.buttons.iter().enumerate() {
-                    report[i] = if pressed { 1 } else { 0 };
+                    if i < 15 { // First 15 bytes for button states
+                        report[i + 1] = if pressed { 1 } else { 0 };
+                    }
                 }
 
                 // Send button report

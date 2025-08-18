@@ -11,6 +11,10 @@ pub const USB_MANUFACTURER: &str = "Elgato Systems";
 pub const USB_PRODUCT: &str = "Stream Deck Mini";
 pub const USB_SERIAL: &str = "PD240100001"; // ProductionDeck serial format
 
+// USB version settings to match real StreamDeck Mini
+pub const USB_BCD_VERSION: u16 = 0x0200; // USB 2.0 (matches real device)
+pub const USB_BCD_DEVICE: u16 = 0x0200; // Device version 2.0 (matches real device)
+
 // ===================================================================
 // Device Specifications (StreamDeck Mini)
 // ===================================================================
@@ -28,7 +32,7 @@ pub const KEY_IMAGE_BYTES: usize = KEY_IMAGE_SIZE * KEY_IMAGE_SIZE * 3; // RGB
 #[allow(dead_code)]
 pub const HID_REPORT_SIZE_INPUT: usize = 32; // Button state report size
 #[allow(dead_code)]
-pub const HID_REPORT_SIZE_OUTPUT: usize = 1024; // Image data report size
+pub const HID_REPORT_SIZE_OUTPUT: usize = 8191; // Image data report size (StreamDeck Mini V1)
 pub const HID_REPORT_SIZE_FEATURE: usize = 32; // Feature report size
 
 // ===================================================================
