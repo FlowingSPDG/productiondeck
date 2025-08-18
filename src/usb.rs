@@ -6,11 +6,13 @@
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Level, Output};
+use embassy_rp::Peri;
 use embassy_rp::peripherals;
 use embassy_rp::usb::Driver;
 use embassy_sync::channel::Receiver;
 use embassy_time::{Duration, Timer};
 use embassy_usb::class::hid::{HidReaderWriter, RequestHandler, ReportId, State, Config as HidConfig};
+use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config, UsbDevice};
 use heapless::Vec;
 
@@ -117,7 +119,7 @@ impl RequestHandler for StreamDeckHidHandler {
         }
     }
 
-    fn set_report(&mut self, id: ReportId, data: &[u8]) -> Option<u64> {
+    fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
         info!("HID Set Report: ID={:?}, len={}", id, data.len());
         
         match id {
@@ -130,7 +132,7 @@ impl RequestHandler for StreamDeckHidHandler {
             _ => {}
         }
         
-        None
+        OutResponse::Accepted
     }
 }
 
@@ -252,14 +254,16 @@ pub async fn usb_task(
         &mut [0; 256],  // Device descriptor buffer
         &mut [0; 256],  // Config descriptor buffer
         &mut [0; 256],  // BOS descriptor buffer
-        &mut [],        // MSOS descriptor buffer
         &mut [0; 128],  // Control buffer
     );
 
+    // Create HID request handler
+    let mut request_handler = StreamDeckHidHandler::new();
+    
     // Create HID class
     let hid_config = HidConfig {
         report_descriptor: HID_REPORT_DESCRIPTOR,
-        request_handler: Some(StreamDeckHidHandler::new()),
+        request_handler: Some(&mut request_handler),
         poll_ms: USB_POLL_RATE_MS as u8,
         max_packet_size: 64,
     };
@@ -322,22 +326,12 @@ pub async fn usb_task(
         }
     };
 
-    // USB status LED control
+    // USB status LED control (simplified - just turn on when USB task is running)
     let led_fut = async {
-        let mut connected = false;
+        info!("USB LED task started");
+        usb_led.set_high();
         loop {
-            let new_connected = usb.ready();
-            if new_connected != connected {
-                connected = new_connected;
-                if connected {
-                    info!("USB connected");
-                    usb_led.set_high();
-                } else {
-                    info!("USB disconnected");
-                    usb_led.set_low();
-                }
-            }
-            Timer::after(Duration::from_millis(100)).await;
+            Timer::after(Duration::from_secs(1)).await;
         }
     };
 

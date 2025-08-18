@@ -10,11 +10,11 @@
 
 #![no_std]
 #![no_main]
-#![feature(async_fn_in_trait)]
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Level, Output, Input, Pull};
+use embassy_rp::gpio::{Level, Output};
+use embassy_rp::Peri;
 use embassy_rp::spi::{Spi, Config as SpiConfig};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::{bind_interrupts, peripherals};
@@ -63,14 +63,14 @@ pub struct ButtonState {
     pub changed: bool,
 }
 
-#[derive(Clone, Debug, Format)]
+#[derive(Clone, Debug)]
 pub enum UsbCommand {
     Reset,
     SetBrightness(u8),
     ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
 }
 
-#[derive(Clone, Debug, Format)]
+#[derive(Clone, Debug)]
 pub enum DisplayCommand {
     Clear(u8),      // Clear specific key
     ClearAll,       // Clear all keys
@@ -85,7 +85,7 @@ pub enum DisplayCommand {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("========================================");
-    info!("ProductionDeck v1.0 - StreamDeck Alternative");
+    info!("ProductionDeck v0.1 - StreamDeck Alternative");
     info!("Hardware: RP2040 (Raspberry Pi Pico)");
     info!("Target: StreamDeck Mini Compatible");
     info!("USB: VID=0x{:04X} PID=0x{:04X}", USB_VID, USB_PID);

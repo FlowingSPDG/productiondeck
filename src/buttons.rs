@@ -5,7 +5,8 @@
 
 use defmt::*;
 use embassy_rp::gpio::{Input, Output, Level, Pull};
-use embassy_rp::{peripherals, Peripherals};
+use embassy_rp::Peri;
+use embassy_rp::peripherals;
 use embassy_time::{Duration, Timer, Instant};
 
 use crate::config::*;
@@ -187,22 +188,20 @@ struct DirectButtons {
 #[allow(dead_code)]
 impl DirectButtons {
     fn new(
-        pins: [
-            peripherals::PIN_2,
-            peripherals::PIN_3,
-            peripherals::PIN_4,
-            peripherals::PIN_5,
-            peripherals::PIN_6,
-            peripherals::PIN_7,
-        ],
+        pin2: peripherals::PIN_2,
+        pin3: peripherals::PIN_3,
+        pin4: peripherals::PIN_4,
+        pin5: peripherals::PIN_5,
+        pin6: peripherals::PIN_6,
+        pin7: peripherals::PIN_7,
     ) -> Self {
         let buttons = [
-            Input::new(pins[0], Pull::Up),
-            Input::new(pins[1], Pull::Up),
-            Input::new(pins[2], Pull::Up),
-            Input::new(pins[3], Pull::Up),
-            Input::new(pins[4], Pull::Up),
-            Input::new(pins[5], Pull::Up),
+            Input::new(pin2, Pull::Up),
+            Input::new(pin3, Pull::Up),
+            Input::new(pin4, Pull::Up),
+            Input::new(pin5, Pull::Up),
+            Input::new(pin6, Pull::Up),
+            Input::new(pin7, Pull::Up),
         ];
 
         Self { buttons }

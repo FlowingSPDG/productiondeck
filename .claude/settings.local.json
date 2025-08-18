@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__onboarding",
+      "mcp__serena__list_dir",
+      "mcp__serena__get_symbols_overview",
+      "Bash(ls:*)",
+      "Bash(cargo --version)",
+      "mcp__serena__search_for_pattern",
+      "Bash(cargo check:*)",
+      "mcp__serena__write_memory",
+      "Bash(grep:*)",
+      "Bash(git add -A)",
+      "mcp__serena__find_file",
+      "WebFetch(domain:docs.embassy.dev)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": [
+      "Bash(git add:*)"
+    ]
+  }
+}
