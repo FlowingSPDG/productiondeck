@@ -4,7 +4,7 @@
 ![Status](https://img.shields.io/badge/Status-Alpha-yellow)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 
-**ProductionDeck** is an open-source hardware and software implementation of a StreamDeck-compatible device using the Raspberry Pi Pico (RP2040). It provides full compatibility with the official StreamDeck software by implementing the exact USB HID protocol used by Elgato StreamDeck Mini.
+**ProductionDeck** is an open-source firmware implementation of a StreamDeck-compatible device using the Raspberry Pi Pico (RP2040). It provides full compatibility with the official StreamDeck software by implementing the exact USB HID protocol used by Elgato StreamDeck Mini.
 
 ## 🚀 Features
 
@@ -13,7 +13,7 @@
 - **6 Programmable Keys** - 3x2 button layout with shared TFT display
 - **80x80 Pixel Display** - Full-color LCD display shared by all keys
 - **Plug-and-Play** - Recognized as authentic StreamDeck Mini by Windows/macOS/Linux
-- **Open Source** - Complete hardware design and firmware source code
+- **Open Source** - Complete firmware source code
 - **RP2040 Based** - Uses the powerful dual-core Raspberry Pi Pico microcontroller
 
 ## 📋 Hardware Requirements
@@ -178,11 +178,8 @@ Same as Windows - the device uses standard USB HID drivers.
 
 ## 🔧 Hardware Assembly
 
-### PCB Design
-The project includes KiCad PCB files for a complete board design:
-- **Schematic:** `hardware/productiondeck.sch`
-- **PCB Layout:** `hardware/productiondeck.kicad_pcb`
-- **Bill of Materials:** `hardware/BOM.csv`
+### Wiring Instructions
+Since this is currently a firmware-only project, you'll need to wire the components manually:
 
 ### Display Connections
 Single ST7735 display connects via SPI (shared by all 6 buttons):
@@ -310,7 +307,6 @@ V2 Image Packet (1024 bytes):
 ## 🤝 Contributing
 
 We welcome contributions! Please see:
-- [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 - [Issues](https://github.com/FlowingSPDG/productiondeck/issues) for bug reports
 - [Discussions](https://github.com/FlowingSPDG/productiondeck/discussions) for questions
 
@@ -322,7 +318,7 @@ We welcome contributions! Please see:
 
 ## 📄 License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## ⚠️ Legal Notice
 
@@ -337,10 +333,8 @@ This project is not affiliated with Elgato Systems. StreamDeck is a trademark of
 
 ## 📞 Support
 
-- **Documentation:** [Wiki](https://github.com/FlowingSPDG/productiondeck/wiki)
-- **Hardware Help:** [Hardware Guide](hardware/README.md)
 - **Firmware Issues:** [Submit Issue](https://github.com/FlowingSPDG/productiondeck/issues)
-- **Community:** [Discord Server](https://discord.gg/productiondeck)
+- **Questions:** [GitHub Discussions](https://github.com/FlowingSPDG/productiondeck/discussions)
 
 ---
 

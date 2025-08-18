@@ -34,300 +34,408 @@ The current implementation follows the patterns described below but uses Rust/Em
 
 ## USB HID Descriptor Implementation
 
-### HID Report Descriptor (C++)
+### HID Report Descriptor (Rust)
 
-```cpp
-// StreamDeck HID Report Descriptor
-const uint8_t streamdeck_hid_report_descriptor[] = {
-    0x05, 0x01,        // Usage Page (Generic Desktop)
-    0x09, 0x00,        // Usage (0x00)
-    0xa1, 0x01,        // Collection (Application)
+```rust
+// StreamDeck HID Report Descriptor - from src/usb.rs
+const HID_REPORT_DESCRIPTOR: &[u8] = &[
+    // Usage Page (Generic Desktop)
+    0x05, 0x01,
+    // Usage (Undefined)
+    0x09, 0x00,
+    // Collection (Application)
+    0xa1, 0x01,
     
-    // Input Report (Button States)
-    0x09, 0x00,        // Usage (0x00)
-    0x15, 0x00,        // Logical Minimum (0)
-    0x25, 0x01,        // Logical Maximum (1)
-    0x75, 0x08,        // Report Size (8 bits)
-    0x95, 0x20,        // Report Count (32 bytes max)
-    0x81, 0x02,        // Input (Data, Variable, Absolute)
+    // ===============================================
+    // Input Report (Button States: Device → Host)
+    // ===============================================
+    0x09, 0x00,                         // Usage (Undefined)
+    0x15, 0x00,                         // Logical Minimum (0)
+    0x25, 0x01,                         // Logical Maximum (1)
+    0x75, 0x08,                         // Report Size (8 bits)
+    0x95, STREAMDECK_KEYS as u8,        // Report Count (6 buttons)
+    0x81, 0x02,                         // Input (Data, Variable, Absolute)
     
-    // Output Report (Image Data)
-    0x09, 0x00,        // Usage (0x00)
-    0x15, 0x00,        // Logical Minimum (0)
-    0x26, 0xFF, 0x00,  // Logical Maximum (255)
-    0x75, 0x08,        // Report Size (8 bits)
-    0x96, 0x00, 0x04,  // Report Count (1024 bytes)
-    0x91, 0x02,        // Output (Data, Variable, Absolute)
+    // ===============================================
+    // Output Report (Image Data: Host → Device)
+    // ===============================================
+    0x09, 0x00,                         // Usage (Undefined)
+    0x15, 0x00,                         // Logical Minimum (0)
+    0x26, 0xFF, 0x00,                   // Logical Maximum (255)
+    0x75, 0x08,                         // Report Size (8 bits)
+    0x96, 0x00, 0x04,                   // Report Count (1024 bytes)
+    0x91, 0x02,                         // Output (Data, Variable, Absolute)
     
-    // Feature Report (Commands)
-    0x09, 0x00,        // Usage (0x00)
-    0x15, 0x00,        // Logical Minimum (0)
-    0x26, 0xFF, 0x00,  // Logical Maximum (255)
-    0x75, 0x08,        // Report Size (8 bits)
-    0x95, 0x20,        // Report Count (32 bytes)
-    0xb1, 0x02,        // Feature (Data, Variable, Absolute)
+    // ===============================================
+    // Feature Report (Commands: Bidirectional)
+    // ===============================================
+    0x09, 0x00,                         // Usage (Undefined)
+    0x15, 0x00,                         // Logical Minimum (0)
+    0x26, 0xFF, 0x00,                   // Logical Maximum (255)
+    0x75, 0x08,                         // Report Size (8 bits)
+    0x95, HID_REPORT_SIZE_FEATURE as u8, // Report Count (32 bytes)
+    0xb1, 0x02,                         // Feature (Data, Variable, Absolute)
     
-    0xc0               // End Collection
-};
+    // End Collection
+    0xc0
+];
 ```
 
-### USB Device Descriptor
+### USB Device Configuration (Rust)
 
-```cpp
-#include <USB.h>
-#include <USBHID.h>
+```rust
+// StreamDeck Mini configuration - from src/config.rs and src/usb.rs
+use embassy_usb::{Builder, Config};
+use embassy_usb::class::hid::{HidReaderWriter, RequestHandler, State, Config as HidConfig};
 
-// StreamDeck Mini configuration
-#define STREAMDECK_VID 0x0fd9
-#define STREAMDECK_PID 0x0063  // Mini
-#define STREAMDECK_KEYS 6
-#define STREAMDECK_KEY_SIZE 80
-#define STREAMDECK_IMAGE_SIZE (STREAMDECK_KEY_SIZE * STREAMDECK_KEY_SIZE * 3)
+// USB identifiers (from config.rs)
+pub const USB_VID: u16 = 0x0fd9;                    // Elgato
+pub const USB_PID: u16 = 0x0063;                    // StreamDeck Mini
+pub const USB_MANUFACTURER: &str = "Elgato Systems";
+pub const USB_PRODUCT: &str = "Stream Deck Mini";
+pub const USB_SERIAL: &str = "ProductionDeck001";
 
-class StreamDeckDevice {
-private:
-    USBHID hid;
-    uint8_t button_states[STREAMDECK_KEYS];
-    uint8_t image_buffer[STREAMDECK_KEYS][STREAMDECK_IMAGE_SIZE];
-    bool receiving_image[STREAMDECK_KEYS];
-    uint16_t image_sequence[STREAMDECK_KEYS];
-    uint16_t image_received[STREAMDECK_KEYS];
-    
-public:
-    StreamDeckDevice() : hid() {
-        memset(button_states, 0, sizeof(button_states));
-        memset(receiving_image, 0, sizeof(receiving_image));
-        memset(image_sequence, 0, sizeof(image_sequence));
-        memset(image_received, 0, sizeof(image_received));
+// Device specifications
+pub const STREAMDECK_KEYS: usize = 6;
+pub const STREAMDECK_KEY_SIZE: usize = 80;
+pub const HID_REPORT_SIZE_FEATURE: usize = 32;
+pub const USB_POLL_RATE_MS: u16 = 1;
+
+// USB configuration function
+fn create_usb_config() -> Config<'static> {
+    let mut config = Config::new(USB_VID, USB_PID);
+    config.manufacturer = Some(USB_MANUFACTURER);
+    config.product = Some(USB_PRODUCT);
+    config.serial_number = Some(USB_SERIAL);
+    config.max_power = 100; // 200mA
+    config.max_packet_size_0 = 64;
+    config.device_class = 0x00; // Interface-defined
+    config.device_sub_class = 0x00;
+    config.device_protocol = 0x00;
+    config.composite_with_iads = false;
+    config
+}
+
+// HID Request Handler
+struct StreamDeckHidHandler {
+    usb_command_sender: embassy_sync::channel::Sender<'static, 
+        embassy_sync::blocking_mutex::raw::ThreadModeRawMutex, UsbCommand, 4>,
+}
+
+impl StreamDeckHidHandler {
+    fn new() -> Self {
+        Self {
+            usb_command_sender: USB_COMMAND_CHANNEL.sender(),
+        }
     }
-    
-    void begin() {
-        // Initialize USB HID with StreamDeck identifiers
-        USB.VID(STREAMDECK_VID);
-        USB.PID(STREAMDECK_PID);
-        USB.productName("Stream Deck Mini");
-        USB.manufacturerName("Elgato Systems");
-        
-        hid.setReportDescriptor(streamdeck_hid_report_descriptor, 
-                               sizeof(streamdeck_hid_report_descriptor));
-        
-        // Set up callbacks
-        hid.onGetReport(std::bind(&StreamDeckDevice::onGetReport, this, 
-                                 std::placeholders::_1, std::placeholders::_2, 
-                                 std::placeholders::_3, std::placeholders::_4));
-        hid.onSetReport(std::bind(&StreamDeckDevice::onSetReport, this,
-                                 std::placeholders::_1, std::placeholders::_2,
-                                 std::placeholders::_3, std::placeholders::_4));
-        
-        hid.begin();
-        USB.begin();
-    }
-};
+}
 ```
 
 ## Protocol Implementation
 
-### Feature Report Handling
+### Feature Report Handling (Rust)
 
-```cpp
-bool StreamDeckDevice::onGetReport(uint8_t report_id, hid_report_type_t report_type, 
-                                  uint8_t* buffer, uint16_t reqlen) {
-    if (report_type == HID_REPORT_TYPE_FEATURE) {
-        if (buffer[0] == 0x04 || buffer[0] == 0x05) {
-            // Version request
-            const char* version = "1.0.0.0";
-            uint8_t offset = (buffer[0] == 0x05) ? 6 : 5;
-            
-            memset(buffer, 0, reqlen);
-            buffer[0] = buffer[0]; // Keep report ID
-            strncpy((char*)&buffer[offset], version, reqlen - offset);
-            return true;
+```rust
+// HID Request Handler implementation - from src/usb.rs
+impl RequestHandler for StreamDeckHidHandler {
+    fn get_report(&mut self, id: ReportId, _buf: &mut [u8]) -> Option<usize> {
+        info!("HID Get Report: ID={:?}", id);
+        
+        match id {
+            ReportId::In(_) => {
+                // Button state will be sent via separate input reports
+                None
+            }
+            ReportId::Feature(report_id) => {
+                // Handle feature report requests (version, etc.)
+                if report_id == FEATURE_REPORT_VERSION_V1 || report_id == FEATURE_REPORT_VERSION_V2 {
+                    // Version request - return firmware version
+                    _buf[0] = report_id;
+                    let offset = if report_id == FEATURE_REPORT_VERSION_V2 { 6 } else { 5 };
+                    let version = b"1.0.0";
+                    
+                    if _buf.len() > offset + version.len() {
+                        _buf[offset..offset + version.len()].copy_from_slice(version);
+                        return Some(HID_REPORT_SIZE_FEATURE);
+                    }
+                }
+                None
+            }
+            _ => None,
         }
     }
-    return false;
-}
 
-bool StreamDeckDevice::onSetReport(uint8_t report_id, hid_report_type_t report_type,
-                                  const uint8_t* buffer, uint16_t bufsize) {
-    if (report_type == HID_REPORT_TYPE_FEATURE) {
-        if (buffer[0] == 0x03 || buffer[0] == 0x0b) {
-            // Reset command
-            if ((buffer[0] == 0x03 && bufsize >= 2 && buffer[1] == 0x02) ||
-                (buffer[0] == 0x0b && bufsize >= 2 && buffer[1] == 0x63)) {
-                resetDevice();
-                return true;
+    fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
+        info!("HID Set Report: ID={:?}, len={}", id, data.len());
+        
+        match id {
+            ReportId::Feature(report_id) => {
+                self.handle_feature_report(report_id, data);
             }
+            ReportId::Out(_) => {
+                self.handle_output_report(data);
+            }
+            _ => {}
         }
         
-        if (buffer[0] == 0x03 || buffer[0] == 0x05) {
-            // Brightness control
-            if ((buffer[0] == 0x03 && bufsize >= 3 && buffer[1] == 0x08) ||
-                (buffer[0] == 0x05 && bufsize >= 6)) {
-                uint8_t brightness = (buffer[0] == 0x03) ? buffer[2] : buffer[5];
-                setBrightness(brightness);
-                return true;
+        None
+    }
+}
+
+// Feature report command handling
+impl StreamDeckHidHandler {
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) {
+        match report_id {
+            FEATURE_REPORT_RESET_V1 => {
+                // V1 Reset: [0x0B, 0x63, ...]
+                if data.len() >= 2 && data[1] == 0x63 {
+                    info!("USB: Reset command (V1)");
+                    let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+                }
+            }
+            0x03 => {
+                // V2 commands: [0x03, command_byte, ...]
+                if data.len() >= 2 {
+                    match data[1] {
+                        0x02 => {
+                            // V2 Reset: [0x03, 0x02, ...]
+                            info!("USB: Reset command (V2)");
+                            let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+                        }
+                        0x08 => {
+                            // V2 Brightness: [0x03, 0x08, brightness, ...]
+                            if data.len() >= 3 {
+                                let brightness = data[2];
+                                info!("USB: Set brightness {}% (V2)", brightness);
+                                let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+                            }
+                        }
+                        _ => {
+                            warn!("Unknown V2 command: 0x{:02X}", data[1]);
+                        }
+                    }
+                }
+            }
+            FEATURE_REPORT_BRIGHTNESS_V1 => {
+                // V1 Brightness: [0x05, 0x55, 0xAA, 0xD1, 0x01, brightness, ...]
+                if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
+                   data[3] == 0xD1 && data[4] == 0x01 {
+                    let brightness = data[5];
+                    info!("USB: Set brightness {}% (V1)", brightness);
+                    let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+                }
+            }
+            _ => {
+                warn!("Unknown feature report ID: 0x{:02X}", report_id);
             }
         }
     }
-    
-    if (report_type == HID_REPORT_TYPE_OUTPUT) {
-        if (buffer[0] == 0x02) {
-            handleImageData(buffer, bufsize);
-            return true;
-        }
-    }
-    
-    return false;
 }
 ```
 
-### Image Data Processing
+### Image Data Processing (Rust)
 
-```cpp
-void StreamDeckDevice::handleImageData(const uint8_t* buffer, uint16_t bufsize) {
-    if (bufsize < 8) return;
-    
-    // Parse V2 header format
-    uint8_t command = buffer[1];
-    uint8_t key_id = buffer[2];
-    uint8_t is_last = buffer[3];
-    uint16_t payload_len = buffer[4] | (buffer[5] << 8);
-    uint16_t sequence = buffer[6] | (buffer[7] << 8);
-    
-    if (command != 0x07 || key_id >= STREAMDECK_KEYS) return;
-    
-    // Handle image data
-    if (sequence == 0) {
-        // First packet - reset state
-        receiving_image[key_id] = true;
-        image_sequence[key_id] = 0;
-        image_received[key_id] = 0;
-    }
-    
-    if (receiving_image[key_id] && sequence == image_sequence[key_id]) {
-        // Copy payload data
-        uint16_t data_offset = 8;
-        uint16_t copy_len = min(payload_len, bufsize - data_offset);
-        uint16_t buffer_offset = image_received[key_id];
-        
-        if (buffer_offset + copy_len <= STREAMDECK_IMAGE_SIZE) {
-            memcpy(&image_buffer[key_id][buffer_offset], &buffer[data_offset], copy_len);
-            image_received[key_id] += copy_len;
-            image_sequence[key_id]++;
+```rust
+// Output report (image data) handling - from src/usb.rs
+impl StreamDeckHidHandler {
+    fn handle_output_report(&mut self, data: &[u8]) {
+        if data.len() < 8 {
+            warn!("Invalid output report length: {}", data.len());
+            return;
         }
-        
-        if (is_last) {
-            // Image complete - process and display
-            processReceivedImage(key_id);
-            receiving_image[key_id] = false;
+
+        debug!("USB Output Report: {} bytes received", data.len());
+        debug!("Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
+               data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+
+        // Parse output report header (StreamDeck Mini V2 protocol)
+        if data[0] == OUTPUT_REPORT_IMAGE && data[1] == IMAGE_COMMAND_V2 {
+            // V2 Image protocol: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
+            let key_id = data[2];
+            let _is_last = data[3];
+            let payload_len = u16::from_le_bytes([data[4], data[5]]);
+            let _sequence = u16::from_le_bytes([data[6], data[7]]);
+
+            debug!("Image packet: key={} seq={} len={} last={}", 
+                   key_id, _sequence, payload_len, _is_last);
+
+            if key_id < STREAMDECK_KEYS as u8 {
+                // Convert slice to heapless Vec for channel communication
+                let mut image_data = Vec::new();
+                if image_data.extend_from_slice(data).is_ok() {
+                    let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { 
+                        key_id, 
+                        data: image_data 
+                    });
+                } else {
+                    error!("Failed to copy image data to buffer");
+                }
+            } else {
+                error!("Invalid key_id {} (max {})", key_id, STREAMDECK_KEYS - 1);
+            }
+        } else {
+            debug!("Unknown output report format: [0x{:02X}, 0x{:02X}]", data[0], data[1]);
         }
     }
 }
 
-void StreamDeckDevice::processReceivedImage(uint8_t key_id) {
-    // For Mini devices, image is BMP format after 54-byte header
-    const uint8_t bmp_header[54] = {
-        0x42, 0x4d, 0xf6, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00,
-        0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0xc0, 0x3c, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0xc4, 0x0e, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-    };
-    
-    // Skip BMP header if present
-    uint8_t* image_data = image_buffer[key_id];
-    if (memcmp(image_data, bmp_header, 54) == 0) {
-        image_data += 54;
+// USB Command processing task
+let command_fut = async {
+    let receiver = USB_COMMAND_CHANNEL.receiver();
+    loop {
+        match receiver.receive().await {
+            UsbCommand::Reset => {
+                info!("Processing reset command");
+                let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::ClearAll).await;
+            }
+            UsbCommand::SetBrightness(brightness) => {
+                info!("Processing brightness command: {}%", brightness);
+                let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::SetBrightness(brightness)).await;
+            }
+            UsbCommand::ImageData { key_id, data } => {
+                debug!("Processing image data for key {}", key_id);
+                let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::DisplayImage { key_id, data }).await;
+            }
+        }
     }
-    
-    // Display image on LCD/TFT for this key
-    displayKeyImage(key_id, image_data, STREAMDECK_KEY_SIZE, STREAMDECK_KEY_SIZE);
-}
+};
 ```
 
-### Button State Reporting
+### Button State Reporting (Rust)
 
-```cpp
-void StreamDeckDevice::updateButtonStates() {
-    // Read physical buttons (implement based on your hardware)
-    uint8_t new_states[STREAMDECK_KEYS];
-    readPhysicalButtons(new_states);
-    
-    // Check for changes
-    bool changed = false;
-    for (int i = 0; i < STREAMDECK_KEYS; i++) {
-        if (new_states[i] != button_states[i]) {
-            button_states[i] = new_states[i];
-            changed = true;
+```rust
+// Button report handling - from src/usb.rs
+let button_fut = async {
+    let receiver = BUTTON_CHANNEL.receiver();
+    loop {
+        let button_state = receiver.receive().await;
+        if button_state.changed {
+            // Convert button state to HID report format
+            let mut report = [0u8; STREAMDECK_KEYS];
+            for (i, &pressed) in button_state.buttons.iter().enumerate() {
+                report[i] = if pressed { 1 } else { 0 };
+            }
+
+            // Send button report
+            match writer.write(&report).await {
+                Ok(()) => {
+                    debug!("Button report sent: {:?}", report);
+                }
+                Err(e) => {
+                    warn!("Failed to send button report: {:?}", e);
+                }
+            }
         }
     }
-    
-    // Send input report if changed
-    if (changed) {
-        sendButtonReport();
-    }
+};
+
+// Button state structure (from main.rs)
+#[derive(Clone, Debug, Format)]
+pub struct ButtonState {
+    pub buttons: [bool; STREAMDECK_KEYS],
+    pub changed: bool,
 }
 
-void StreamDeckDevice::sendButtonReport() {
-    uint8_t report[STREAMDECK_KEYS + 1]; // +1 for potential offset
-    
-    // Mini uses direct mapping, no offset
-    memcpy(report, button_states, STREAMDECK_KEYS);
-    
-    hid.sendInputReport(report, STREAMDECK_KEYS);
-}
+// Channel communication for button events
+use embassy_sync::channel::Channel;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+
+pub static BUTTON_CHANNEL: Channel<ThreadModeRawMutex, ButtonState, 4> = Channel::new();
 ```
 
 ## Hardware Integration Examples
 
-### RP2040 Implementation
+### RP2040 Implementation (Rust)
 
-```cpp
-#include <Adafruit_TinyUSB.h>
-#include <Adafruit_ST7735.h>  // For TFT displays
+```rust
+// Main application - from src/main.rs
+use embassy_executor::Spawner;
+use embassy_rp::bind_interrupts;
+use embassy_rp::peripherals::USB;
+use embassy_rp::usb::{Driver, InterruptHandler};
 
-// RP2040-specific setup
-void setup() {
-    // Initialize TinyUSB stack
-    TinyUSB_Device_Init(0);
+bind_interrupts!(struct Irqs {
+    USBCTRL_IRQ => InterruptHandler<USB>;
+});
+
+#[embassy_executor::main]
+async fn main(spawner: Spawner) {
+    let p = embassy_rp::init(Default::default());
     
-    StreamDeckDevice streamdeck;
-    streamdeck.begin();
+    // Create USB driver
+    let driver = Driver::new(p.USB, Irqs);
     
-    // Initialize displays and buttons
-    initializeDisplays();
-    initializeButtons();
+    // Spawn USB task
+    spawner.spawn(usb_task(driver, p.PIN_20)).unwrap();
+    
+    // Spawn display task on core 1
+    spawner.spawn(display_task(
+        p.SPI0, p.PIN_19, p.PIN_18, p.PIN_14, p.PIN_15, p.PIN_8, p.PIN_17
+    )).unwrap();
+    
+    // Spawn button scanning task
+    spawner.spawn(button_task(
+        p.PIN_2, p.PIN_3, p.PIN_4, p.PIN_5, p.PIN_6
+    )).unwrap();
+    
+    // Main loop - Embassy handles everything asynchronously
+    loop {
+        Timer::after(Duration::from_secs(1)).await;
+    }
 }
 
-void loop() {
-    streamdeck.updateButtonStates();
-    delay(10); // 100Hz polling rate
+// USB task spawned on core 0
+#[embassy_executor::task]
+pub async fn usb_task(
+    driver: Driver<'static, peripherals::USB>,
+    usb_led_pin: peripherals::PIN_20,
+) {
+    // USB implementation as shown above...
 }
 ```
 
-### STM32 Implementation
+### Embassy Async Architecture (Rust)
 
-```cpp
-#include "usbd_hid.h"
-#include "usbd_desc.h"
+```rust
+// Embassy provides async/await for embedded systems
+// Multiple concurrent tasks instead of traditional main loop
 
-// STM32 HAL setup
-int main(void) {
-    HAL_Init();
-    SystemClock_Config();
-    
-    // Initialize USB Device Library
-    USBD_Init(&USBD_Device, &HID_Desc, 0);
-    USBD_RegisterClass(&USBD_Device, &USBD_HID);
-    USBD_Start(&USBD_Device);
-    
-    StreamDeckDevice streamdeck;
-    streamdeck.begin();
-    
-    while (1) {
-        streamdeck.updateButtonStates();
-        HAL_Delay(10);
-    }
+// Task coordination using channels
+use embassy_sync::channel::Channel;
+use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
+
+// Communication channels between tasks
+pub static BUTTON_CHANNEL: Channel<ThreadModeRawMutex, ButtonState, 4> = Channel::new();
+pub static USB_COMMAND_CHANNEL: Channel<ThreadModeRawMutex, UsbCommand, 4> = Channel::new();
+pub static DISPLAY_CHANNEL: Channel<ThreadModeRawMutex, DisplayCommand, 8> = Channel::new();
+
+// USB commands enum
+#[derive(Clone, Debug, Format)]
+pub enum UsbCommand {
+    Reset,
+    SetBrightness(u8),
+    ImageData {
+        key_id: u8,
+        data: heapless::Vec<u8, 1024>,
+    },
 }
+
+// Display commands enum  
+#[derive(Clone, Debug, Format)]
+pub enum DisplayCommand {
+    ClearAll,
+    SetBrightness(u8),
+    DisplayImage {
+        key_id: u8,
+        data: heapless::Vec<u8, 1024>,
+    },
+}
+
+// All tasks run concurrently using Embassy's async executor
+// - USB task handles HID protocol
+// - Button task scans physical buttons
+// - Display task manages TFT screen
+// - All communicate via channels (lock-free, async)
 ```
 
 ## Testing and Validation
@@ -338,15 +446,28 @@ int main(void) {
 3. Verify recognition in Device Manager (should show as "Stream Deck Mini")
 4. Test button presses and image updates in Stream Deck software
 
-### Protocol Validation
-```cpp
-void StreamDeckDevice::debugProtocol(const uint8_t* buffer, uint16_t len) {
-    Serial.print("Received: ");
-    for (int i = 0; i < min(len, 16); i++) {
-        Serial.printf("%02X ", buffer[i]);
-    }
-    Serial.println();
-}
+### Protocol Validation (Rust)
+```rust
+// Debug logging using defmt (Real-Time Transfer)
+use defmt::{debug, info, warn, error};
+
+// Protocol debugging in handle_output_report
+debug!("USB Output Report: {} bytes received", data.len());
+debug!("Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
+       data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+
+// Feature report debugging
+info!("HID Get Report: ID={:?}", id);
+info!("HID Set Report: ID={:?}, len={}", id, data.len());
+
+// Command processing logs
+info!("USB: Reset command (V1)");
+info!("USB: Set brightness {}% (V2)", brightness);
+debug!("Processing image data for key {}", key_id);
+
+// Use RTT (Real-Time Transfer) for zero-overhead logging
+// Set DEFMT_LOG environment variable to control log levels:
+// DEFMT_LOG=debug cargo build
 ```
 
 ## Key Implementation Notes

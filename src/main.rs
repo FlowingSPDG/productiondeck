@@ -10,21 +10,18 @@
 
 #![no_std]
 #![no_main]
-#![feature(async_fn_in_trait)]
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Level, Output, Input, Pull};
-use embassy_rp::spi::{Spi, Config as SpiConfig};
+use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::{bind_interrupts, peripherals};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
-use embassy_usb::class::hid::{HidReaderWriter, State, Config as HidConfig};
-use embassy_usb::{Builder, UsbDevice};
 use heapless::Vec;
 use panic_halt as _;
+use defmt_rtt as _; // global logger
 
 mod config;
 mod usb;
@@ -33,7 +30,6 @@ mod buttons;
 
 use config::*;
 use usb::*;
-use display::*;
 use buttons::*;
 
 // ===================================================================
@@ -63,19 +59,19 @@ pub struct ButtonState {
     pub changed: bool,
 }
 
-#[derive(Clone, Debug, Format)]
+#[derive(Clone, Debug)]
 pub enum UsbCommand {
     Reset,
     SetBrightness(u8),
-    ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
+    ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> }, // Large buffer causes HardFault - needs investigation
 }
 
-#[derive(Clone, Debug, Format)]
+#[derive(Clone, Debug)]
 pub enum DisplayCommand {
     Clear(u8),      // Clear specific key
     ClearAll,       // Clear all keys
     SetBrightness(u8),
-    DisplayImage { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
+    DisplayImage { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> }, // Large buffer causes HardFault - needs investigation
 }
 
 // ===================================================================
@@ -85,7 +81,7 @@ pub enum DisplayCommand {
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     info!("========================================");
-    info!("ProductionDeck v1.0 - StreamDeck Alternative");
+    info!("ProductionDeck v0.1 - StreamDeck Alternative");
     info!("Hardware: RP2040 (Raspberry Pi Pico)");
     info!("Target: StreamDeck Mini Compatible");
     info!("USB: VID=0x{:04X} PID=0x{:04X}", USB_VID, USB_PID);
@@ -95,22 +91,32 @@ async fn main(spawner: Spawner) {
 
     let p = embassy_rp::init(Default::default());
 
-    // Initialize status LED
-    let mut led = Output::new(p.PIN_25, Level::Low);
-    led.set_high();
-    Timer::after(Duration::from_millis(500)).await;
-    led.set_low();
-
     info!("Initializing ProductionDeck...");
 
     // Create USB driver
     let driver = Driver::new(p.USB, Irqs);
 
     // Spawn core tasks
-    spawner.spawn(usb_task(driver, p.PIN_20)).unwrap(); // USB task with USB status LED
-    spawner.spawn(button_task(p.PIN_2, p.PIN_3, p.PIN_4, p.PIN_5, p.PIN_6)).unwrap(); // Button scanning task
-    spawner.spawn(display_task(p.SPI0, p.PIN_18, p.PIN_19, p.PIN_8, p.PIN_14, p.PIN_15, p.PIN_17)).unwrap(); // Display task
-    spawner.spawn(status_task(p.PIN_25, p.PIN_21)).unwrap(); // Status LED task
+    spawner.spawn(usb_task(driver, Output::new(p.PIN_20, Level::Low))).unwrap(); // USB task with USB status LED
+    spawner.spawn(button_task(
+        Output::new(p.PIN_2, Level::High),
+        Output::new(p.PIN_3, Level::High),
+        Input::new(p.PIN_4, Pull::Up),
+        Input::new(p.PIN_5, Pull::Up),
+        Input::new(p.PIN_6, Pull::Up),
+    )).unwrap(); // Button scanning task
+    /*
+    spawner.spawn(display_task(
+        p.SPI0,
+        p.PIN_18,
+        p.PIN_19,
+        p.PIN_8,
+        p.PIN_14,
+        p.PIN_15,
+        p.PIN_17,
+    )).unwrap(); // Display task
+*/
+    spawner.spawn(status_task(Output::new(p.PIN_25, Level::Low), Output::new(p.PIN_21, Level::Low))).unwrap(); // Status LED task
 
     info!("ProductionDeck initialized successfully");
     info!("USB VID:PID = {:04X}:{:04X}", USB_VID, USB_PID);
@@ -131,11 +137,9 @@ async fn main(spawner: Spawner) {
 
 #[embassy_executor::task]
 async fn status_task(
-    status_pin: peripherals::PIN_25,
-    error_pin: peripherals::PIN_21,
+    mut status_led: Output<'static>,
+    _error_led: Output<'static>,
 ) {
-    let mut status_led = Output::new(status_pin, Level::Low);
-    let _error_led = Output::new(error_pin, Level::Low);
 
     info!("Status LED task started");
 

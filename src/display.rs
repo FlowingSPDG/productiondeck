@@ -3,14 +3,13 @@
 //! This module manages a single 216x144 display divided into 6 regions (72x72 each)
 //! to simulate individual key displays like the StreamDeck Mini.
 
+#![allow(dead_code)]
+
 use defmt::*;
-use embassy_rp::gpio::{Output, Level};
+use embassy_rp::gpio::Output;
 use embassy_rp::peripherals;
-use embassy_rp::spi::{Spi, Config as SpiConfig, Phase, Polarity};
-use embassy_rp::pwm::{Pwm, Config as PwmConfig};
+use embassy_rp::spi::Spi;
 use embassy_time::{Duration, Timer};
-use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_hal::spi::MODE_0;
 use heapless::Vec;
 
 use crate::config::*;
@@ -31,32 +30,13 @@ struct DisplayController {
 
 impl DisplayController {
     async fn new(
-        spi0: peripherals::SPI0,
-        sck_pin: peripherals::PIN_18,
-        mosi_pin: peripherals::PIN_19,
-        cs_pin: peripherals::PIN_8,
-        dc_pin: peripherals::PIN_14,
-        rst_pin: peripherals::PIN_15,
-        bl_pin: peripherals::PIN_17,
+        spi: Spi<'static, peripherals::SPI0, embassy_rp::spi::Blocking>,
+        cs: Output<'static>,
+        dc: Output<'static>,
+        rst: Output<'static>,
+        _bl: Output<'static>,
     ) -> Self {
         info!("Initializing display controller");
-
-        // Configure SPI
-        let mut spi_config = SpiConfig::default();
-        spi_config.frequency = SPI_BAUDRATE;
-        spi_config.phase = Phase::CaptureOnFirstTransition;
-        spi_config.polarity = Polarity::IdleLow;
-
-        // MISO pin not needed for display-only SPI
-        let spi = Spi::new_blocking_txonly(spi0, sck_pin, mosi_pin, spi_config);
-
-        // Configure control pins
-        let cs = Output::new(cs_pin, Level::High); // CS high = deselected
-        let dc = Output::new(dc_pin, Level::Low); // DC low = command mode
-        let rst = Output::new(rst_pin, Level::High); // RST high = not reset
-
-        // Configure backlight as simple GPIO output for now (TODO: add PWM)
-        let _backlight = Output::new(bl_pin, Level::High); // Turn on backlight
 
         let mut controller = Self {
             spi,
@@ -85,18 +65,18 @@ impl DisplayController {
         Timer::after(Duration::from_millis(120)).await;
 
         // Initialization sequence for ST7735
-        self.send_command(0x01).await; // Software reset
+        self.send_command(ST7735_SWRESET).await; // Software reset
         Timer::after(Duration::from_millis(150)).await;
 
-        self.send_command(0x11).await; // Sleep out
+        self.send_command(ST7735_SLPOUT).await; // Sleep out
         Timer::after(Duration::from_millis(120)).await;
 
         // Color mode - 16 bit RGB565
-        self.send_command(0x3A).await;
-        self.send_data(&[0x05]).await;
+        self.send_command(ST7735_COLMOD).await;
+        self.send_data(&[ST7735_COLOR_MODE_16BIT]).await;
 
         // Column address set (0 to DISPLAY_TOTAL_WIDTH-1)
-        self.send_command(0x2A).await;
+        self.send_command(ST7735_CASET).await;
         let width_bytes = (DISPLAY_TOTAL_WIDTH - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start column (0)
@@ -104,7 +84,7 @@ impl DisplayController {
         ]).await;
 
         // Row address set (0 to DISPLAY_TOTAL_HEIGHT-1)
-        self.send_command(0x2B).await;
+        self.send_command(ST7735_RASET).await;
         let height_bytes = (DISPLAY_TOTAL_HEIGHT - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start row (0)
@@ -112,13 +92,13 @@ impl DisplayController {
         ]).await;
 
         // Display inversion off
-        self.send_command(0x20).await;
+        self.send_command(ST7735_INVOFF).await;
 
         // Normal display mode
-        self.send_command(0x13).await;
+        self.send_command(ST7735_NORON).await;
 
         // Display on
-        self.send_command(0x29).await;
+        self.send_command(ST7735_DISPON).await;
         Timer::after(Duration::from_millis(10)).await;
 
         // Deselect display
@@ -148,21 +128,21 @@ impl DisplayController {
 
     async fn set_window(&mut self, x_start: u16, y_start: u16, x_end: u16, y_end: u16) {
         // Column address set
-        self.send_command(0x2A).await;
+        self.send_command(ST7735_CASET).await;
         self.send_data(&[
             (x_start >> 8) as u8, (x_start & 0xFF) as u8,
             (x_end >> 8) as u8, (x_end & 0xFF) as u8,
         ]).await;
 
         // Row address set
-        self.send_command(0x2B).await;
+        self.send_command(ST7735_RASET).await;
         self.send_data(&[
             (y_start >> 8) as u8, (y_start & 0xFF) as u8,
             (y_end >> 8) as u8, (y_end & 0xFF) as u8,
         ]).await;
 
         // Memory write
-        self.send_command(0x2C).await;
+        self.send_command(ST7735_RAMWR).await;
     }
 
     async fn display_image(&mut self, key_id: u8, image_data: &[u8]) {
@@ -218,7 +198,7 @@ impl DisplayController {
                 let b = rgb_data[rgb_offset + 2];
 
                 // Convert to RGB565
-                let rgb565 = ((r as u16 & 0xF8) << 8) | ((g as u16 & 0xFC) << 3) | (b as u16 >> 3);
+                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8) | ((g as u16 & RGB565_GREEN_MASK) << 3) | (b as u16 >> RGB565_BLUE_SHIFT);
 
                 // Send as big-endian
                 buffer[0] = (rgb565 >> 8) as u8;
@@ -382,18 +362,16 @@ impl ImageBuffer {
 
 #[embassy_executor::task]
 pub async fn display_task(
-    spi0: peripherals::SPI0,
-    sck_pin: peripherals::PIN_18,
-    mosi_pin: peripherals::PIN_19,
-    cs_pin: peripherals::PIN_8,
-    dc_pin: peripherals::PIN_14,
-    rst_pin: peripherals::PIN_15,
-    bl_pin: peripherals::PIN_17,
+    spi: embassy_rp::spi::Spi<'static, peripherals::SPI0, embassy_rp::spi::Blocking>,
+    cs: Output<'static>,
+    dc: Output<'static>,
+    rst: Output<'static>,
+    bl: Output<'static>,
 ) {
     info!("Display task started");
 
     let mut controller = DisplayController::new(
-        spi0, sck_pin, mosi_pin, cs_pin, dc_pin, rst_pin, bl_pin
+        spi, cs, dc, rst, bl
     ).await;
 
     let mut image_buffers: [ImageBuffer; STREAMDECK_KEYS] = Default::default();
