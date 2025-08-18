@@ -65,18 +65,18 @@ impl DisplayController {
         Timer::after(Duration::from_millis(120)).await;
 
         // Initialization sequence for ST7735
-        self.send_command(0x01).await; // Software reset
+        self.send_command(ST7735_SWRESET).await; // Software reset
         Timer::after(Duration::from_millis(150)).await;
 
-        self.send_command(0x11).await; // Sleep out
+        self.send_command(ST7735_SLPOUT).await; // Sleep out
         Timer::after(Duration::from_millis(120)).await;
 
         // Color mode - 16 bit RGB565
-        self.send_command(0x3A).await;
-        self.send_data(&[0x05]).await;
+        self.send_command(ST7735_COLMOD).await;
+        self.send_data(&[ST7735_COLOR_MODE_16BIT]).await;
 
         // Column address set (0 to DISPLAY_TOTAL_WIDTH-1)
-        self.send_command(0x2A).await;
+        self.send_command(ST7735_CASET).await;
         let width_bytes = (DISPLAY_TOTAL_WIDTH - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start column (0)
@@ -84,7 +84,7 @@ impl DisplayController {
         ]).await;
 
         // Row address set (0 to DISPLAY_TOTAL_HEIGHT-1)
-        self.send_command(0x2B).await;
+        self.send_command(ST7735_RASET).await;
         let height_bytes = (DISPLAY_TOTAL_HEIGHT - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start row (0)
@@ -92,13 +92,13 @@ impl DisplayController {
         ]).await;
 
         // Display inversion off
-        self.send_command(0x20).await;
+        self.send_command(ST7735_INVOFF).await;
 
         // Normal display mode
-        self.send_command(0x13).await;
+        self.send_command(ST7735_NORON).await;
 
         // Display on
-        self.send_command(0x29).await;
+        self.send_command(ST7735_DISPON).await;
         Timer::after(Duration::from_millis(10)).await;
 
         // Deselect display
@@ -128,21 +128,21 @@ impl DisplayController {
 
     async fn set_window(&mut self, x_start: u16, y_start: u16, x_end: u16, y_end: u16) {
         // Column address set
-        self.send_command(0x2A).await;
+        self.send_command(ST7735_CASET).await;
         self.send_data(&[
             (x_start >> 8) as u8, (x_start & 0xFF) as u8,
             (x_end >> 8) as u8, (x_end & 0xFF) as u8,
         ]).await;
 
         // Row address set
-        self.send_command(0x2B).await;
+        self.send_command(ST7735_RASET).await;
         self.send_data(&[
             (y_start >> 8) as u8, (y_start & 0xFF) as u8,
             (y_end >> 8) as u8, (y_end & 0xFF) as u8,
         ]).await;
 
         // Memory write
-        self.send_command(0x2C).await;
+        self.send_command(ST7735_RAMWR).await;
     }
 
     async fn display_image(&mut self, key_id: u8, image_data: &[u8]) {
@@ -198,7 +198,7 @@ impl DisplayController {
                 let b = rgb_data[rgb_offset + 2];
 
                 // Convert to RGB565
-                let rgb565 = ((r as u16 & 0xF8) << 8) | ((g as u16 & 0xFC) << 3) | (b as u16 >> 3);
+                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8) | ((g as u16 & RGB565_GREEN_MASK) << 3) | (b as u16 >> RGB565_BLUE_SHIFT);
 
                 // Send as big-endian
                 buffer[0] = (rgb565 >> 8) as u8;

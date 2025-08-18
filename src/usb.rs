@@ -250,7 +250,7 @@ impl RequestHandler for StreamDeckHidHandler {
 			ReportId::Feature(report_id) => {
 				// Handle feature report requests for StreamDeck Mini
 				match report_id {
-					0x05 => {
+					FEATURE_REPORT_BRIGHTNESS_V1 => {
 						// Compatibility: read firmware via GET_REPORT 0x05
 						let total_len = 32.min(_buf.len());
 						for i in 0..total_len { _buf[i] = 0x00; }
@@ -266,7 +266,7 @@ impl RequestHandler for StreamDeckHidHandler {
 						info!("HID Get Report 0x05: returning {} bytes, version='3.00.000'", total_len);
 						Some(total_len)
 					}
-					0xa1 => {
+					FEATURE_REPORT_FIRMWARE_INFO => {
 						// Report ID 0xA1 - Firmware Version response (32 bytes)
 						// Match real device: 32 bytes response with header and ASCII version
 						let total_len = 32.min(_buf.len());
@@ -284,7 +284,7 @@ impl RequestHandler for StreamDeckHidHandler {
 						info!("HID Get Report 0xA1: returning {} bytes, version='3.00.000'", total_len);
 						Some(total_len)
 					}
-					0x04 => {
+					FEATURE_REPORT_VERSION_V1 => {
 						// Firmware Version request (V1 path used by some hosts/tools)
 						// Return 17 bytes. Bytes [5..] contain ASCII version
 						let version = b"3.00.000";
@@ -396,21 +396,17 @@ impl StreamDeckHidHandler {
 				}
 			}
 			FEATURE_REPORT_BRIGHTNESS_V1 => {
-				// V1 Brightness: [0x05, 0x55, 0xAA, 0xD1, 0x01, brightness, ...]
-				if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
-				   data[3] == 0xD1 && data[4] == 0x01 {
-					let brightness = data[5];
-					info!("USB: Set brightness {}% (V1)", brightness);
-					let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
-				}
-			}
-			0x05 => {
-				// Report ID 0x05 - Reset command (V1)
-				// Format: [0x05, 0x55, 0xAA, 0xD1, 0x01, 0x3e, ...]
-				if data.len() >= 6 && data[1] == 0x55 && data[2] == 0xAA && 
-				   data[3] == 0xD1 && data[4] == 0x01 && data[5] == 0x3e {
-					info!("USB: Reset command (V1 - Report ID 0x05)");
-					let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+				// V1 Brightness/Reset: [0x05, 0x55, 0xAA, 0xD1, 0x01, value, ...]
+				if data.len() >= 6 && data[1] == STREAMDECK_MAGIC_1 && data[2] == STREAMDECK_MAGIC_2 && 
+				   data[3] == STREAMDECK_MAGIC_3 && data[4] == 0x01 {
+					if data[5] == STREAMDECK_BRIGHTNESS_RESET_MAGIC {
+						info!("USB: Reset command (V1 - Report ID 0x05)");
+						let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
+					} else {
+						let brightness = data[5];
+						info!("USB: Set brightness {}% (V1)", brightness);
+						let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+					}
 				}
 			}
 			_ => {
@@ -568,7 +564,7 @@ pub async fn usb_task(
         let receiver = BUTTON_CHANNEL.receiver();
         
         // Send initial button state report (all buttons released)
-        let mut initial_report = [0u8; 16];
+        let mut initial_report = [0u8; HID_REPORT_SIZE_INPUT];
         initial_report[0] = 0x01; // Report ID
         match writer.write(&initial_report).await {
             Ok(()) => {
@@ -584,7 +580,7 @@ pub async fn usb_task(
             let button_state = receiver.receive().await;
             
             // Convert button state to HID report format (Report ID 0x01, 16 bytes)
-            let mut report = [0u8; 16];
+            let mut report = [0u8; HID_REPORT_SIZE_INPUT];
             report[0] = 0x01; // Report ID
             
             for (i, &pressed) in button_state.buttons.iter().enumerate() {
