@@ -85,7 +85,8 @@ pub const DISPLAY_TOTAL_HEIGHT: usize = STREAMDECK_ROWS * KEY_IMAGE_SIZE; // 144
 
 // USB Configuration
 pub const USB_POLL_RATE_MS: u64 = 1; // 1ms USB polling (1000Hz)
-pub const IMAGE_BUFFER_SIZE: usize = KEY_IMAGE_BYTES + 100; // Extra space for headers
+// pub const IMAGE_BUFFER_SIZE: usize = KEY_IMAGE_BYTES + 100; // Extra space for headers // ここでVectorのバッファサイズが大きいためHardFaultが発生するためコメントアウト
+pub const IMAGE_BUFFER_SIZE: usize = 1024; // 1KBのバッファサイズに変更
 
 // Performance options
 #[allow(dead_code)]

@@ -298,9 +298,15 @@ pub async fn usb_task(
                     info!("Processing brightness command: {}%", brightness);
                     let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::SetBrightness(brightness)).await;
                 }
+                // ここでVectorのバッファサイズが大きいためHardFaultが発生するためコメントアウト
+                /*
                 UsbCommand::ImageData { key_id, data } => {
                     debug!("Processing image data for key {}", key_id);
                     let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::DisplayImage { key_id, data }).await;
+                }
+                */
+                _ => {
+                    warn!("Unknown USB command");
                 }
             }
         }

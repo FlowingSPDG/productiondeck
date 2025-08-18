@@ -63,7 +63,7 @@ pub struct ButtonState {
 pub enum UsbCommand {
     Reset,
     SetBrightness(u8),
-    ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
+    ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> }, // Large buffer causes HardFault - needs investigation
 }
 
 #[derive(Clone, Debug)]
@@ -71,7 +71,7 @@ pub enum DisplayCommand {
     Clear(u8),      // Clear specific key
     ClearAll,       // Clear all keys
     SetBrightness(u8),
-    DisplayImage { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
+    DisplayImage { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> }, // Large buffer causes HardFault - needs investigation
 }
 
 // ===================================================================
