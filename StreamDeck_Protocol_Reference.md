@@ -4,6 +4,17 @@
 
 This document provides exact packet structures and protocol details needed for USB device implementation.
 
+## ProductionDeck Implementation Notes
+
+**ProductionDeck** implements the StreamDeck Mini protocol (PID: 0x0063) using:
+- **Language**: Rust with Embassy async framework
+- **Target**: RP2040 (Raspberry Pi Pico)
+- **USB Stack**: Embassy USB with usbd-hid
+- **Protocol Version**: V1 (BMP format, BGR color order)
+- **Display**: Single shared 80x80 ST7735 TFT (all 6 buttons display on same screen)
+
+The protocol implementation in `src/usb.rs` follows these exact specifications.
+
 ## USB Device Configuration
 
 ### Required Identifiers

@@ -1,8 +1,22 @@
 # StreamDeck USB HID Device Implementation
 
-## Complete C++ Implementation Guide for Arduino/RP2040/STM32
+## Complete Implementation Guide for RP2040 with Rust/Embassy
 
-This document provides a complete implementation guide for creating a StreamDeck-compatible USB HID device that works with official StreamDeck software on Windows.
+This document provides implementation guidance for creating a StreamDeck-compatible USB HID device that works with official StreamDeck software on Windows.
+
+## ProductionDeck Current Implementation
+
+**ProductionDeck** implements this protocol using:
+- **Language**: Rust 2021 Edition
+- **Framework**: Embassy async framework
+- **Target**: RP2040 (thumbv6m-none-eabi)
+- **USB Stack**: Embassy USB with usbd-hid
+- **Implementation Files**:
+  - `src/usb.rs` - USB HID device and protocol handling
+  - `src/config.rs` - USB descriptors and constants
+  - `src/main.rs` - Device initialization and task coordination
+
+The current implementation follows the patterns described below but uses Rust/Embassy instead of C++.
 
 ## Hardware Requirements
 
@@ -13,9 +27,10 @@ This document provides a complete implementation guide for creating a StreamDeck
 - **Arduino Leonardo/Micro** (limited capabilities)
 
 ### Display Requirements
-- TFT LCD array for button displays (e.g., 15x 72x72px displays)
+- **ProductionDeck**: Single ST7735 TFT display (80x80px) shared by all 6 buttons
+- **Traditional StreamDeck**: Individual TFT LCD per button (e.g., 15x 72x72px displays)
 - Button matrix for input detection
-- Optional: WS2812B LEDs for status indication
+- Optional: Status LEDs for connection/error indication
 
 ## USB HID Descriptor Implementation
 
