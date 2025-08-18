@@ -120,3 +120,7 @@ pids
 *.pid
 *.seed
 *.pid.lock
+
+# Added by cargo
+
+/target
