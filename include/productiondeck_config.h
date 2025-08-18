@@ -16,7 +16,7 @@
 #define STREAMDECK_KEYS         6           // Number of keys (3x2 layout)
 #define STREAMDECK_COLS         3           // Keys per row
 #define STREAMDECK_ROWS         2           // Number of rows
-#define KEY_IMAGE_SIZE          80          // 80x80 pixels per key
+#define KEY_IMAGE_SIZE          72          // 72x72 pixels per key (official spec)
 #define KEY_IMAGE_BYTES         (KEY_IMAGE_SIZE * KEY_IMAGE_SIZE * 3) // RGB
 
 // USB HID Configuration
@@ -36,22 +36,23 @@
 // Alternative: Direct button connections (if not using matrix)
 #define BTN_DIRECT_PINS        {2, 3, 4, 5, 6, 7}  // One GPIO per button
 
-// SPI Display Interface (for key LCD displays)
-// Using SPI0 interface
+// SPI Display Interface (for shared LCD display)
+// Using SPI0 interface - ONE LARGE DISPLAY divided into 6 key regions
 #define SPI_PORT               spi0
-#define SPI_MISO_PIN           16           // Not used for displays
-#define SPI_MOSI_PIN           19           // Data to displays
-#define SPI_SCK_PIN            18           // Clock to displays
+#define SPI_MISO_PIN           16           // Not used for display
+#define SPI_MOSI_PIN           19           // Data to display
+#define SPI_SCK_PIN            18           // Clock to display
 #define SPI_BAUDRATE           10000000     // 10MHz SPI clock
 
-// Display Control Pins (one set per display)
-// CS (Chip Select) pins for individual display control
-#define DISPLAY_CS_PINS        {8, 9, 10, 11, 12, 13}  // CS for displays 0-5
-
-// Shared display control pins
+// Single Display Control Pins (one shared display)
+#define DISPLAY_CS_PIN         8            // Chip select for the main display
 #define DISPLAY_DC_PIN         14           // Data/Command select
-#define DISPLAY_RST_PIN        15           // Reset (shared by all displays)
+#define DISPLAY_RST_PIN        15           // Reset
 #define DISPLAY_BL_PIN         17           // Backlight control (PWM)
+
+// Display Layout (total screen divided into key regions)
+#define DISPLAY_TOTAL_WIDTH    (STREAMDECK_COLS * KEY_IMAGE_SIZE)  // 216 pixels
+#define DISPLAY_TOTAL_HEIGHT   (STREAMDECK_ROWS * KEY_IMAGE_SIZE)  // 144 pixels
 
 // Status LEDs (optional)
 #define LED_STATUS_PIN         25           // Built-in LED on Pico
@@ -106,12 +107,12 @@
     BTN COL1 GP5  [ 7]      [34] GP28
     BTN COL2 GP6  [ 8]      [33] GND
              GND  [ 9]      [32] GP27
-    DISP CS0 GP8  [10]      [31] GP26
-    DISP CS1 GP9  [11]      [30] RUN
-    DISP CS2 GP10 [12]      [29] GP22
-    DISP CS3 GP11 [13]      [28] GND
-    DISP CS4 GP12 [14]      [27] GP21  LED_ERROR
-    DISP CS5 GP13 [15]      [26] GP20  LED_USB
+    DISP CS  GP8  [10]      [31] GP26
+             GP9  [11]      [30] RUN
+             GP10 [12]      [29] GP22
+             GP11 [13]      [28] GND
+             GP12 [14]      [27] GP21  LED_ERROR
+             GP13 [15]      [26] GP20  LED_USB
              GND  [16]      [25] GP19  SPI_MOSI
     DISP DC  GP14 [17]      [24] GP18  SPI_SCK
     DISP RST GP15 [18]      [23] GND
@@ -119,10 +120,10 @@
     DISP BL  GP17 [20]      [21] GP16  SPI_MISO (unused)
 
     Additional connections:
-    - LED_STATUS: GP25 (built-in LED)
+    - LED_STATUS: GP25 (built-in LED)  
     - Each button connects between ROW pin and COL pin
-    - All displays share DC, RST, MOSI, SCK
-    - Each display has individual CS pin
+    - Single large display uses one CS, shared DC, RST, MOSI, SCK
+    - Display is divided into 6 key regions (3x2 layout)
     
     Button Matrix Layout:
     ROW0: BTN0(GP2-GP4) BTN1(GP2-GP5) BTN2(GP2-GP6)
@@ -141,6 +142,6 @@
 #error "USB VID/PID must match StreamDeck Mini for software compatibility"
 #endif
 
-#if KEY_IMAGE_SIZE != 80
-#error "StreamDeck Mini requires 80x80 pixel images"
+#if KEY_IMAGE_SIZE != 72
+#error "StreamDeck Mini requires 72x72 pixel images per official specification"
 #endif

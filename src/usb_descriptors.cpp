@@ -280,7 +280,11 @@ void usb_process_feature_report(uint8_t report_id, const uint8_t* buffer, uint16
 void usb_process_output_report(const uint8_t* buffer, uint16_t bufsize) {
     if (!g_productiondeck || bufsize < 8) return;
     
-    // Parse output report header
+    printf("[DEBUG] USB Output Report: %d bytes received\n", bufsize);
+    printf("[DEBUG] Header: [0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X]\n",
+           buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5], buffer[6], buffer[7]);
+    
+    // Parse output report header (StreamDeck Mini V2 protocol)
     if (buffer[0] == OUTPUT_REPORT_IMAGE && buffer[1] == IMAGE_COMMAND_V2) {
         // V2 Image protocol: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
         uint8_t key_id = buffer[2];
@@ -288,10 +292,15 @@ void usb_process_output_report(const uint8_t* buffer, uint16_t bufsize) {
         uint16_t payload_len = buffer[4] | (buffer[5] << 8);
         uint16_t sequence = buffer[6] | (buffer[7] << 8);
         
+        printf("[DEBUG] Image packet: key=%d seq=%d len=%d last=%d (for 72x72 key region)\n", 
+               key_id, sequence, payload_len, is_last);
+        
         if (key_id < STREAMDECK_KEYS) {
-            printf("USB: Image packet key=%d seq=%d len=%d last=%d\n", 
-                   key_id, sequence, payload_len, is_last);
             g_productiondeck->receive_image_packet(buffer, bufsize);
+        } else {
+            printf("[ERROR] Invalid key_id %d (max %d)\n", key_id, STREAMDECK_KEYS - 1);
         }
+    } else {
+        printf("[DEBUG] Unknown output report format: [0x%02X, 0x%02X]\n", buffer[0], buffer[1]);
     }
 }

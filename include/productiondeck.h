@@ -100,9 +100,8 @@ private:
     void scan_direct_buttons();
     bool debounce_button(uint8_t key, bool raw_state);
     
-    // Display management
-    void init_display(uint8_t display_id);
-    void select_display(uint8_t display_id);
+    // Display management (single shared display)
+    void init_shared_display();
     void send_display_command(uint8_t command);
     void send_display_data(const uint8_t* data, uint16_t length);
     void set_display_brightness(uint8_t brightness);

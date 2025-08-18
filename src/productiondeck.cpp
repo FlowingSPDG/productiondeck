@@ -174,18 +174,13 @@ bool ProductionDeck::init_usb() {
 }
 
 bool ProductionDeck::init_displays() {
-    log_info("Initializing displays...");
+    log_info("Initializing SINGLE SHARED DISPLAY (StreamDeck architecture)...");
     
-    // Initialize each display
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    
-    for (int i = 0; i < STREAMDECK_KEYS; i++) {
-        init_display(i);
-        sleep_ms(10); // Small delay between initializations
-    }
+    // Initialize the one shared display (not individual displays)
+    init_shared_display();
     
     state_.displays_ready = true;
-    log_info("All displays initialized");
+    log_info("Shared display initialized (216x144 px divided into 6 key regions)");
     return true;
 }
 
@@ -225,20 +220,19 @@ bool ProductionDeck::init_buttons() {
 // ===================================================================
 
 void ProductionDeck::setup_gpio() {
+    log_debug("Setting up GPIO pins...");
+    
     // Status LEDs
     HardwareInterface::gpio_init_output(LED_STATUS_PIN, false);
     HardwareInterface::gpio_init_output(LED_USB_PIN, false);
     HardwareInterface::gpio_init_output(LED_ERROR_PIN, false);
     
-    // Display control pins
+    // Single display control pins
     HardwareInterface::gpio_init_output(DISPLAY_DC_PIN, false);
     HardwareInterface::gpio_init_output(DISPLAY_RST_PIN, true);
+    HardwareInterface::gpio_init_output(DISPLAY_CS_PIN, true); // CS high = deselected
     
-    // CS pins for each display
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    for (int i = 0; i < STREAMDECK_KEYS; i++) {
-        HardwareInterface::gpio_init_output(cs_pins[i], true); // CS high = deselected
-    }
+    log_debug("GPIO setup complete - single display configuration");
 }
 
 void ProductionDeck::setup_spi() {
@@ -428,21 +422,31 @@ void ProductionDeck::process_complete_image(uint8_t key_id) {
     ImageBuffer* buf = &image_buffers_[key_id];
     if (!buf->complete) return;
     
-    log_info("Processing image for key %d", key_id);
+    log_info("Processing complete image for key %d (%d bytes total)", key_id, buf->bytes_received);
     
-    // For StreamDeck Mini, images are BMP format after potential header
-    // Skip BMP header if present (54 bytes)
+    // For StreamDeck Mini, images are typically in BGR format (per documentation)
+    // Expected size: 72x72x3 = 15552 bytes for raw RGB data
     uint8_t* image_data = buf->data;
     uint16_t image_size = buf->bytes_received;
+    
+    log_debug("Image data analysis: size=%d bytes, expected=%d bytes for 72x72 RGB", 
+              image_size, KEY_IMAGE_SIZE * KEY_IMAGE_SIZE * 3);
     
     // Check for BMP header (starts with "BM")
     if (image_size > 54 && image_data[0] == 0x42 && image_data[1] == 0x4D) {
         image_data += 54;
         image_size -= 54;
-        log_debug("Skipped BMP header for key %d", key_id);
+        log_debug("Skipped BMP header for key %d, remaining data: %d bytes", key_id, image_size);
     }
     
-    // Display the image
+    // Log first few bytes for debugging
+    if (image_size >= 8) {
+        log_debug("Image data starts: [0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X]",
+                  image_data[0], image_data[1], image_data[2], image_data[3],
+                  image_data[4], image_data[5], image_data[6], image_data[7]);
+    }
+    
+    // Display the image on the appropriate region of the shared display
     display_image(key_id, image_data, KEY_IMAGE_SIZE, KEY_IMAGE_SIZE);
     
     // Reset buffer for next image
@@ -460,138 +464,54 @@ void ProductionDeck::reset_image_buffer(uint8_t key_id) {
 // Display Management
 // ===================================================================
 
-void ProductionDeck::init_display(uint8_t display_id) {
-    // Validate display ID
-    if (display_id >= STREAMDECK_KEYS) {
-        log_error("Invalid display ID: %d", display_id);
-        return;
-    }
+void ProductionDeck::init_shared_display() {
+    log_info("Initializing shared display (StreamDeck architecture)");
     
-    log_info("Initializing display %d", display_id);
+    // Select the display
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, true);
     
-    // Get CS pin for this display
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    uint8_t cs_pin = cs_pins[display_id];
-    
-    // Select this display's CS pin
-    HardwareInterface::spi_select_device(cs_pin, true);
-    
-    // Reset the display using shared RST pin
-    log_debug("Resetting display %d", display_id);
+    // Reset the display
+    log_debug("Resetting shared display");
     HardwareInterface::gpio_set(DISPLAY_RST_PIN, false);
     HardwareInterface::sleep_ms(10);
     HardwareInterface::gpio_set(DISPLAY_RST_PIN, true);
-    HardwareInterface::sleep_ms(120); // Wait for display to boot
-    
-    // Send ST7735 initialization sequence
-    log_debug("Sending initialization sequence to display %d", display_id);
-    
-    // Software reset
-    send_display_command(0x01);
-    HardwareInterface::sleep_ms(150);
-    
-    // Sleep out
-    send_display_command(0x11);
     HardwareInterface::sleep_ms(120);
     
-    // Frame rate control
-    send_display_command(0xB1);
-    uint8_t frc[] = {0x01, 0x2C, 0x2D};
-    send_display_data(frc, sizeof(frc));
+    // Send initialization sequence for full display (216x144)
+    log_debug("Initializing display for 216x144 resolution (6 regions of 72x72)");
     
-    send_display_command(0xB2);
-    send_display_data(frc, sizeof(frc));
+    send_display_command(0x01); // Software reset
+    HardwareInterface::sleep_ms(150);
     
-    send_display_command(0xB3);
-    uint8_t frc2[] = {0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D};
-    send_display_data(frc2, sizeof(frc2));
-    
-    // Column inversion
-    send_display_command(0xB4);
-    uint8_t inv = 0x07;
-    send_display_data(&inv, 1);
-    
-    // Power control
-    send_display_command(0xC0);
-    uint8_t pwr1[] = {0xA2, 0x02, 0x84};
-    send_display_data(pwr1, sizeof(pwr1));
-    
-    send_display_command(0xC1);
-    uint8_t pwr2 = 0xC5;
-    send_display_data(&pwr2, 1);
-    
-    send_display_command(0xC2);
-    uint8_t pwr3[] = {0x0A, 0x00};
-    send_display_data(pwr3, sizeof(pwr3));
-    
-    send_display_command(0xC3);
-    uint8_t pwr4[] = {0x8A, 0x2A};
-    send_display_data(pwr4, sizeof(pwr4));
-    
-    send_display_command(0xC4);
-    uint8_t pwr5[] = {0x8A, 0xEE};
-    send_display_data(pwr5, sizeof(pwr5));
-    
-    // VCOM control
-    send_display_command(0xC5);
-    uint8_t vcom = 0x0E;
-    send_display_data(&vcom, 1);
-    
-    // Memory access control (270° rotation for StreamDeck Mini)
-    send_display_command(0x36);
-    uint8_t madctl = 0xC8; // RGB, row/col addr order, 270° rotation
-    send_display_data(&madctl, 1);
+    send_display_command(0x11); // Sleep out
+    HardwareInterface::sleep_ms(120);
     
     // Color mode - 16 bit RGB565
     send_display_command(0x3A);
     uint8_t colmod = 0x05;
     send_display_data(&colmod, 1);
     
-    // Column address set (0-79)
+    // Column address set (0-215 for 216 pixels wide)
     send_display_command(0x2A);
-    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t caset[] = {0x00, 0x00, 0x00, DISPLAY_TOTAL_WIDTH - 1};
     send_display_data(caset, sizeof(caset));
     
-    // Row address set (0-79)  
+    // Row address set (0-143 for 144 pixels tall)
     send_display_command(0x2B);
-    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t raset[] = {0x00, 0x00, 0x00, DISPLAY_TOTAL_HEIGHT - 1};
     send_display_data(raset, sizeof(raset));
-    
-    // Gamma correction
-    send_display_command(0xE0);
-    uint8_t gmctrp[] = {0x02, 0x1C, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2D,
-                        0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10};
-    send_display_data(gmctrp, sizeof(gmctrp));
-    
-    send_display_command(0xE1);
-    uint8_t gmctrn[] = {0x03, 0x1D, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D,
-                        0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10};
-    send_display_data(gmctrn, sizeof(gmctrn));
     
     // Display on
     send_display_command(0x29);
     HardwareInterface::sleep_ms(10);
     
-    // Deselect this display
-    HardwareInterface::spi_select_device(cs_pin, false);
+    // Deselect display
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, false);
     
-    log_info("Display %d initialization complete", display_id);
+    log_info("Shared display initialization complete");
 }
 
-void ProductionDeck::select_display(uint8_t display_id) {
-    if (display_id >= STREAMDECK_KEYS) {
-        return;
-    }
-    
-    // Deselect all displays first
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    for (int i = 0; i < STREAMDECK_KEYS; i++) {
-        HardwareInterface::spi_select_device(cs_pins[i], false);
-    }
-    
-    // Select the specified display
-    HardwareInterface::spi_select_device(cs_pins[display_id], true);
-}
+// NOTE: Old individual display functions removed - now using shared display architecture
 
 void ProductionDeck::send_display_command(uint8_t command) {
     // Set DC pin low for command mode
@@ -615,23 +535,42 @@ void ProductionDeck::display_image(uint8_t key_id, const uint8_t* image_data,
         return;
     }
     
-    log_debug("Displaying image on key %d (%dx%d)", key_id, width, height);
+    log_debug("Displaying %dx%d image on key %d (shared display region)", width, height, key_id);
     
-    // Select the display
-    select_display(key_id);
+    // Calculate position on shared display (3x2 layout)
+    uint16_t col = key_id % STREAMDECK_COLS;
+    uint16_t row = key_id / STREAMDECK_COLS;
+    uint16_t x_start = col * KEY_IMAGE_SIZE;
+    uint16_t y_start = row * KEY_IMAGE_SIZE;
+    uint16_t x_end = x_start + KEY_IMAGE_SIZE - 1;
+    uint16_t y_end = y_start + KEY_IMAGE_SIZE - 1;
     
-    // Set window to full screen (80x80)
+    log_debug("Key %d maps to display region: (%d,%d) to (%d,%d)", 
+              key_id, x_start, y_start, x_end, y_end);
+    
+    // Select the shared display
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, true);
+    
+    // Set window to key region (72x72)
     send_display_command(0x2A); // Column address set
-    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t caset[] = {
+        (uint8_t)(x_start >> 8), (uint8_t)(x_start & 0xFF),
+        (uint8_t)(x_end >> 8), (uint8_t)(x_end & 0xFF)
+    };
     send_display_data(caset, sizeof(caset));
     
     send_display_command(0x2B); // Row address set
-    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t raset[] = {
+        (uint8_t)(y_start >> 8), (uint8_t)(y_start & 0xFF),
+        (uint8_t)(y_end >> 8), (uint8_t)(y_end & 0xFF)
+    };
     send_display_data(raset, sizeof(raset));
     
     send_display_command(0x2C); // Memory write
     
-    // Convert RGB888 to RGB565 and send to display
+    log_debug("Converting and writing %d pixels to shared display region", width * height);
+    
+    // Convert RGB888 to RGB565 and send to display region
     uint16_t pixel_count = width * height;
     
     for (uint16_t i = 0; i < pixel_count; i++) {
@@ -648,40 +587,54 @@ void ProductionDeck::display_image(uint8_t key_id, const uint8_t* image_data,
     }
     
     // Deselect display
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    HardwareInterface::spi_select_device(cs_pins[key_id], false);
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, false);
     
-    log_info("Image displayed on key %d: %d pixels", key_id, pixel_count);
+    log_info("Image displayed on key %d region of shared display: %d pixels", key_id, pixel_count);
 }
 
 void ProductionDeck::clear_key(uint8_t key_id) {
     if (key_id >= STREAMDECK_KEYS || !state_.displays_ready) return;
     
-    log_debug("Clearing key %d", key_id);
+    log_debug("Clearing key %d region on shared display", key_id);
     
-    // Select the display
-    select_display(key_id);
+    // Calculate position on shared display (3x2 layout)
+    uint16_t col = key_id % STREAMDECK_COLS;
+    uint16_t row = key_id / STREAMDECK_COLS;
+    uint16_t x_start = col * KEY_IMAGE_SIZE;
+    uint16_t y_start = row * KEY_IMAGE_SIZE;
+    uint16_t x_end = x_start + KEY_IMAGE_SIZE - 1;
+    uint16_t y_end = y_start + KEY_IMAGE_SIZE - 1;
     
-    // Set window to full screen (80x80)
+    // Select the shared display
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, true);
+    
+    // Set window to key region (72x72)
     send_display_command(0x2A); // Column address set
-    uint8_t caset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t caset[] = {
+        (uint8_t)(x_start >> 8), (uint8_t)(x_start & 0xFF),
+        (uint8_t)(x_end >> 8), (uint8_t)(x_end & 0xFF)
+    };
     send_display_data(caset, sizeof(caset));
     
     send_display_command(0x2B); // Row address set
-    uint8_t raset[] = {0x00, 0x00, 0x00, 0x4F};
+    uint8_t raset[] = {
+        (uint8_t)(y_start >> 8), (uint8_t)(y_start & 0xFF),
+        (uint8_t)(y_end >> 8), (uint8_t)(y_end & 0xFF)
+    };
     send_display_data(raset, sizeof(raset));
     
     send_display_command(0x2C); // Memory write
     
-    // Fill entire screen with black (RGB565: 0x0000)
+    // Fill key region with black (RGB565: 0x0000)
     uint8_t black_pixel[] = {0x00, 0x00};
-    for (int i = 0; i < 80 * 80; i++) {
+    for (int i = 0; i < KEY_IMAGE_SIZE * KEY_IMAGE_SIZE; i++) {
         send_display_data(black_pixel, 2);
     }
     
     // Deselect display
-    uint8_t cs_pins[] = DISPLAY_CS_PINS;
-    HardwareInterface::spi_select_device(cs_pins[key_id], false);
+    HardwareInterface::spi_select_device(DISPLAY_CS_PIN, false);
+    
+    log_debug("Key %d region cleared", key_id);
 }
 
 void ProductionDeck::clear_all_keys() {

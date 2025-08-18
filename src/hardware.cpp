@@ -16,28 +16,24 @@
 // ===================================================================
 
 void HardwareInterface::gpio_init_output(uint gpio, bool initial_state) {
-    gpio_init(gpio);
-    gpio_set_dir(gpio, GPIO_OUT);
-    gpio_put(gpio, initial_state);
+    printf("[DEBUG] GPIO Init Output: pin=%d initial_state=%s\n", gpio, initial_state ? "HIGH" : "LOW");
+    // TODO: Replace with actual gpio_init(gpio); gpio_set_dir(gpio, GPIO_OUT); gpio_put(gpio, initial_state);
 }
 
 void HardwareInterface::gpio_init_input(uint gpio, bool pullup) {
-    gpio_init(gpio);
-    gpio_set_dir(gpio, GPIO_IN);
-    
-    if (pullup) {
-        gpio_pull_up(gpio);
-    } else {
-        gpio_disable_pulls(gpio);
-    }
+    printf("[DEBUG] GPIO Init Input: pin=%d pullup=%s\n", gpio, pullup ? "ENABLED" : "DISABLED");
+    // TODO: Replace with actual gpio_init(gpio); gpio_set_dir(gpio, GPIO_IN); gpio_pull_up/disable(gpio);
 }
 
 void HardwareInterface::gpio_set(uint gpio, bool state) {
-    gpio_put(gpio, state);
+    printf("[DEBUG] GPIO Set: pin=%d state=%s\n", gpio, state ? "HIGH" : "LOW");
+    // TODO: Replace with actual gpio_put(gpio, state);
 }
 
 bool HardwareInterface::gpio_get(uint gpio) {
-    return gpio_get(gpio);
+    printf("[DEBUG] GPIO Get: pin=%d (returning simulated LOW)\n", gpio);
+    // TODO: Replace with actual gpio_get(gpio);
+    return false; // Simulate button not pressed for testing
 }
 
 // ===================================================================
@@ -45,27 +41,21 @@ bool HardwareInterface::gpio_get(uint gpio) {
 // ===================================================================
 
 bool HardwareInterface::spi_init(spi_inst_t* spi, uint baudrate) {
-    // Initialize SPI with default settings
-    uint actual_baudrate = spi_init(spi, baudrate);
-    
-    // Configure SPI parameters
-    spi_set_format(spi, 
-                   8,        // 8 bits per transfer
-                   SPI_CPOL_0, // Clock polarity 0 (idle low)
-                   SPI_CPHA_0, // Clock phase 0 (sample on rising edge)
-                   SPI_MSB_FIRST); // MSB first
-    
-    printf("SPI initialized: requested %d Hz, actual %d Hz\n", baudrate, actual_baudrate);
+    printf("[DEBUG] SPI Init: baudrate=%d Hz (simulated)\n", baudrate);
+    // TODO: Replace with actual SPI initialization
+    // uint actual_baudrate = spi_init(spi, baudrate);
+    // spi_set_format(spi, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
     return true;
 }
 
 void HardwareInterface::spi_write(spi_inst_t* spi, const uint8_t* data, size_t len) {
-    spi_write_blocking(spi, data, len);
+    printf("[DEBUG] SPI Write: %zu bytes (simulated)\n", len);
+    // TODO: Replace with actual spi_write_blocking(spi, data, len);
 }
 
 void HardwareInterface::spi_select_device(uint cs_pin, bool select) {
-    // CS is active low for most SPI devices
-    gpio_put(cs_pin, !select);
+    printf("[DEBUG] SPI CS: pin=%d %s (simulated)\n", cs_pin, select ? "SELECT" : "DESELECT");
+    // TODO: Replace with actual gpio_put(cs_pin, !select);
 }
 
 // ===================================================================
@@ -117,9 +107,10 @@ DisplayDriver::DisplayDriver(uint8_t cs_pin, uint8_t dc_pin, uint8_t rst_pin)
 }
 
 bool DisplayDriver::initialize() {
-    printf("Initializing display CS=%d DC=%d RST=%d\n", cs_pin_, dc_pin_, rst_pin_);
+    printf("[DEBUG] Initializing SINGLE LARGE DISPLAY (216x144 px, divided into 6 key regions)\n");
+    printf("[DEBUG] Display control pins - CS=%d DC=%d RST=%d\n", cs_pin_, dc_pin_, rst_pin_);
     
-    // Initialize control pins
+    // Initialize control pins (debug mode)
     HardwareInterface::gpio_init_output(cs_pin_, true);  // CS high = deselected
     HardwareInterface::gpio_init_output(dc_pin_, false); // DC low = command mode
     HardwareInterface::gpio_init_output(rst_pin_, true); // RST high = not reset
@@ -131,7 +122,7 @@ bool DisplayDriver::initialize() {
     init_sequence();
     
     initialized_ = true;
-    printf("Display initialized successfully\n");
+    printf("[DEBUG] Single large display initialized successfully (NOT 6 individual displays)\n");
     return true;
 }
 
@@ -260,40 +251,14 @@ void DisplayDriver::clear() {
 void DisplayDriver::display_image(const uint8_t* image_data, uint16_t width, uint16_t height) {
     if (!initialized_ || !image_data) return;
     
-    printf("Displaying %dx%d image\n", width, height);
+    printf("[DEBUG] Display Image: %dx%d pixels (%d bytes) - SIMULATED\n", width, height, width * height * 3);
+    printf("[DEBUG] Would write to shared display at calculated position\n");
     
-    select();
+    // TODO: Calculate position on shared display based on key ID
+    // TODO: Set window to specific key region, not full screen
+    // TODO: Convert RGB888 to display format and send via SPI
     
-    // Set window to full screen
-    send_command(0x2A); // Column address set
-    uint8_t caset[] = {0x00, 0x00, 0x00, width - 1};
-    send_data(caset, sizeof(caset));
-    
-    send_command(0x2B); // Row address set
-    uint8_t raset[] = {0x00, 0x00, 0x00, height - 1};
-    send_data(raset, sizeof(raset));
-    
-    send_command(0x2C); // Memory write
-    
-    // Convert RGB888 to RGB565 and send
-    uint16_t pixel_count = width * height;
-    
-    for (uint16_t i = 0; i < pixel_count; i++) {
-        uint8_t r = image_data[i * 3 + 0];
-        uint8_t g = image_data[i * 3 + 1];
-        uint8_t b = image_data[i * 3 + 2];
-        
-        // Convert to RGB565
-        uint16_t rgb565 = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
-        
-        // Send as big-endian
-        uint8_t pixel_data[] = {(uint8_t)(rgb565 >> 8), (uint8_t)(rgb565 & 0xFF)};
-        send_data(pixel_data, 2);
-    }
-    
-    deselect();
-    
-    printf("Image display complete\n");
+    printf("[DEBUG] Image display complete (simulated)\n");
 }
 
 void DisplayDriver::display_color(uint16_t color) {
