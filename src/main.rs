@@ -14,15 +14,11 @@
 use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::gpio::{Input, Level, Output, Pull};
-use embassy_rp::Peri;
-use embassy_rp::spi::{Spi, Config as SpiConfig};
 use embassy_rp::usb::{Driver, InterruptHandler};
 use embassy_rp::{bind_interrupts, peripherals};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Duration, Timer};
-use embassy_usb::class::hid::{HidReaderWriter, State, Config as HidConfig};
-use embassy_usb::{Builder, UsbDevice};
 use heapless::Vec;
 use panic_halt as _;
 
@@ -33,7 +29,6 @@ mod buttons;
 
 use config::*;
 use usb::*;
-use display::*;
 use buttons::*;
 
 // ===================================================================

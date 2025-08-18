@@ -4,13 +4,10 @@
 //! to simulate individual key displays like the StreamDeck Mini.
 
 use defmt::*;
-use embassy_rp::gpio::{Output, Level};
+use embassy_rp::gpio::Output;
 use embassy_rp::peripherals;
-use embassy_rp::spi::{Spi, Config as SpiConfig, Phase, Polarity};
-use embassy_rp::pwm::{Pwm, Config as PwmConfig};
+use embassy_rp::spi::Spi;
 use embassy_time::{Duration, Timer};
-use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_hal::spi::MODE_0;
 use heapless::Vec;
 
 use crate::config::*;
@@ -35,7 +32,7 @@ impl DisplayController {
         cs: Output<'static>,
         dc: Output<'static>,
         rst: Output<'static>,
-        bl: Output<'static>,
+        _bl: Output<'static>,
     ) -> Self {
         info!("Initializing display controller");
 

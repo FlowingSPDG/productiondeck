@@ -4,9 +4,7 @@
 //! and sends button state changes to the USB task.
 
 use defmt::*;
-use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pin, Pull};
-use embassy_rp::Peri;
-use embassy_rp::peripherals;
+use embassy_rp::gpio::{Input, Output};
 use embassy_time::{Duration, Timer, Instant};
 
 use crate::config::*;
@@ -139,7 +137,7 @@ pub async fn button_task(
         col2,
     );
     let mut debouncer = ButtonDebouncer::new();
-    let mut last_button_state = ButtonState {
+    let mut _last_button_state = ButtonState {
         buttons: [false; STREAMDECK_KEYS],
         changed: false,
     };
@@ -174,7 +172,7 @@ pub async fn button_task(
             new_state.changed = true;
             sender.send(new_state).await;
             debug!("Button state sent: {:?}", new_state.buttons);
-            last_button_state = new_state;
+            _last_button_state = new_state;
         }
 
         // Wait for next scan
@@ -182,42 +180,3 @@ pub async fn button_task(
     }
 }
 
-// ===================================================================
-// Direct Button Implementation (Alternative)
-// ===================================================================
-
-#[allow(dead_code)]
-struct DirectButtons {
-    buttons: [Input<'static>; STREAMDECK_KEYS],
-}
-
-#[allow(dead_code)]
-impl DirectButtons {
-    fn new(
-        pin2: embassy_rp::gpio::Input<'static>,
-        pin3: embassy_rp::gpio::Input<'static>,
-        pin4: embassy_rp::gpio::Input<'static>,
-        pin5: embassy_rp::gpio::Input<'static>,
-        pin6: embassy_rp::gpio::Input<'static>,
-        pin7: embassy_rp::gpio::Input<'static>,
-    ) -> Self {
-        let buttons: [Input<'static>; STREAMDECK_KEYS] = [
-            pin2,
-            pin3,
-            pin4,
-            pin5,
-            pin6,
-            pin7,
-        ];
-
-        Self { buttons }
-    }
-
-    fn scan(&self) -> [bool; STREAMDECK_KEYS] {
-        let mut states = [false; STREAMDECK_KEYS];
-        for (i, button) in self.buttons.iter().enumerate() {
-            states[i] = !button.is_high(); // Inverted due to pull-up
-        }
-        states
-    }
-}

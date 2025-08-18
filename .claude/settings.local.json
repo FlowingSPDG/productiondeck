@@ -14,7 +14,8 @@
       "Bash(git add -A)",
       "mcp__serena__find_file",
       "WebFetch(domain:docs.embassy.dev)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "mcp__serena__think_about_collected_information"
     ],
     "deny": [
       "Bash(git add:*)"

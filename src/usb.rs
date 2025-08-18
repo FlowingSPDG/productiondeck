@@ -4,20 +4,17 @@
 //! StreamDeck Mini compatibility with official software.
 
 use defmt::*;
-use embassy_executor::Spawner;
-use embassy_rp::gpio::{Level, Output};
-use embassy_rp::Peri;
+use embassy_rp::gpio::Output;
 use embassy_rp::peripherals;
 use embassy_rp::usb::Driver;
-use embassy_sync::channel::Receiver;
 use embassy_time::{Duration, Timer};
 use embassy_usb::class::hid::{HidReaderWriter, RequestHandler, ReportId, State, Config as HidConfig};
 use embassy_usb::control::OutResponse;
-use embassy_usb::{Builder, Config, UsbDevice};
+use embassy_usb::{Builder, Config};
 use heapless::Vec;
 
 use crate::config::*;
-use crate::{BUTTON_CHANNEL, USB_COMMAND_CHANNEL, DISPLAY_CHANNEL, ButtonState, UsbCommand, DisplayCommand};
+use crate::{BUTTON_CHANNEL, USB_COMMAND_CHANNEL, DISPLAY_CHANNEL, UsbCommand, DisplayCommand};
 
 // ===================================================================
 // USB HID Report Descriptor (StreamDeck Mini Compatible)
@@ -246,39 +243,44 @@ pub async fn usb_task(
     let config = create_usb_config();
 
     // Create USB builder
-    let mut device_desc_buf = [0; 256];
-    let mut config_desc_buf = [0; 256];
-    let mut bos_desc_buf = [0; 256];
-    let mut control_buf = [0; 128];
-    let mut builder = Builder::new(
-        driver,
-        config,
-        &mut device_desc_buf,  // Device descriptor buffer
-        &mut config_desc_buf,  // Config descriptor buffer
-        &mut bos_desc_buf,     // BOS descriptor buffer
-        &mut control_buf,      // Control buffer
-    );
+    static mut DEVICE_DESC_BUF: [u8; 256] = [0; 256];
+    static mut CONFIG_DESC_BUF: [u8; 256] = [0; 256];
+    static mut BOS_DESC_BUF: [u8; 256] = [0; 256];
+    static mut CONTROL_BUF: [u8; 128] = [0; 128];
+    let mut builder = unsafe {
+        #[allow(static_mut_refs)]
+        Builder::new(
+            driver,
+            config,
+            &mut DEVICE_DESC_BUF,  // Device descriptor buffer
+            &mut CONFIG_DESC_BUF,  // Config descriptor buffer
+            &mut BOS_DESC_BUF,     // BOS descriptor buffer
+            &mut CONTROL_BUF,      // Control buffer
+        )
+    };
 
     // Create HID request handler
     static mut REQUEST_HANDLER: Option<StreamDeckHidHandler> = None;
     unsafe {
         REQUEST_HANDLER = Some(StreamDeckHidHandler::new());
-        let hid_config = HidConfig {
-            report_descriptor: HID_REPORT_DESCRIPTOR,
-            request_handler: REQUEST_HANDLER.as_mut().map(|h| h as _),
-            poll_ms: USB_POLL_RATE_MS as u8,
-            max_packet_size: 64,
-        };
     }
+    let hid_config = HidConfig {
+        report_descriptor: HID_REPORT_DESCRIPTOR,
+        #[allow(static_mut_refs)]
+        request_handler: unsafe { REQUEST_HANDLER.as_mut().map(|h| h as _) },
+        poll_ms: USB_POLL_RATE_MS as u8,
+        max_packet_size: 64,
+    };
 
-    let mut hid_state = State::new();
-    let hid = HidReaderWriter::<_, 64, 64>::new(&mut builder, &mut hid_state, hid_config);
+    static mut HID_STATE: State = State::new();
+    #[allow(static_mut_refs)]
+    let hid = unsafe { HidReaderWriter::<_, 64, 64>::new(&mut builder, &mut HID_STATE, hid_config) };
 
     // Build USB device
     let mut usb = builder.build();
 
     // Split HID into reader and writer
-    let (reader, mut writer) = hid.split();
+    let (_reader, mut writer) = hid.split();
 
     // Spawn USB device task
     let usb_fut = usb.run();
