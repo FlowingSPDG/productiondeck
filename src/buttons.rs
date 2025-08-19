@@ -8,14 +8,15 @@ use embassy_rp::gpio::{Input, Output};
 use embassy_time::{Duration, Timer, Instant};
 
 use crate::config::*;
-use crate::{BUTTON_CHANNEL, ButtonState};
+use crate::channels::BUTTON_CHANNEL;
+use crate::types::ButtonState;
 
 // ===================================================================
 // Button Debouncing State
 // ===================================================================
 
 struct ButtonDebouncer {
-    buttons: [ButtonDebounceState; STREAMDECK_KEYS],
+    buttons: [ButtonDebounceState; 32], // Max keys for any device
 }
 
 #[derive(Clone, Copy)]
@@ -32,7 +33,7 @@ impl ButtonDebouncer {
                 current: false,
                 raw: false,
                 last_change: Instant::now(),
-            }; STREAMDECK_KEYS],
+            }; 32], // Max keys for any device
         }
     }
 
@@ -64,8 +65,8 @@ impl ButtonDebouncer {
 // ===================================================================
 
 struct ButtonMatrix {
-    rows: [Output<'static>; STREAMDECK_ROWS],
-    cols: [Input<'static>; STREAMDECK_COLS],
+    rows: [Output<'static>; 2], // Keep simple for now - Mini layout
+    cols: [Input<'static>; 3], // Keep simple for now - Mini layout
 }
 
 impl ButtonMatrix {
@@ -90,8 +91,8 @@ impl ButtonMatrix {
         Self { rows, cols }
     }
 
-    async fn scan(&mut self) -> [bool; STREAMDECK_KEYS] {
-        let mut button_states = [false; STREAMDECK_KEYS];
+    async fn scan(&mut self) -> [bool; 32] {
+        let mut button_states = [false; 32]; // Max keys for any device
 
         for (row_idx, row) in self.rows.iter_mut().enumerate() {
             // Pull current row low
@@ -101,7 +102,7 @@ impl ButtonMatrix {
             Timer::after(Duration::from_micros(10)).await;
 
             for (col_idx, col) in self.cols.iter().enumerate() {
-                let key_index = row_idx * STREAMDECK_COLS + col_idx;
+                let key_index = row_idx * 3 + col_idx; // Mini layout for now
                 
                 // Read column pin (low = button pressed due to pull-up)
                 button_states[key_index] = !col.is_high();
@@ -138,8 +139,9 @@ pub async fn button_task(
     );
     let mut debouncer = ButtonDebouncer::new();
     let mut _last_button_state = ButtonState {
-        buttons: [false; STREAMDECK_KEYS],
+        buttons: [false; 32], // Max keys for any device
         changed: false,
+        active_count: 6, // Fixed size for now - Mini layout
     };
 
     let scan_interval = Duration::from_millis(1000 / BUTTON_SCAN_RATE_HZ);
@@ -153,18 +155,16 @@ pub async fn button_task(
 
         // Update debouncer and check for changes
         let mut changed = false;
-        let mut new_state = ButtonState {
-            buttons: [false; STREAMDECK_KEYS],
-            changed: false,
-        };
+        let active_keys = crate::config::streamdeck_keys();
+        let mut new_state = ButtonState::new(active_keys);
 
-        for i in 0..STREAMDECK_KEYS {
+        for i in 0..active_keys.min(6) { // Limit to hardware capability for now
             if debouncer.update(i, raw_states[i]) {
                 changed = true;
                 let pressed = debouncer.get_state(i);
                 debug!("Button {} {}", i, if pressed { "pressed" } else { "released" });
             }
-            new_state.buttons[i] = debouncer.get_state(i);
+            new_state.set_button(i, debouncer.get_state(i));
         }
 
         // Send state if changed

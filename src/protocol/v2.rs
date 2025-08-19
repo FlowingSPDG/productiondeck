@@ -1,0 +1,226 @@
+//! StreamDeck V2 Protocol Handler
+//! 
+//! Handles Original V2, XL, MK2, and Plus devices using JPEG format
+
+use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
+use crate::device::ProtocolVersion;
+use crate::config::{
+    IMAGE_BUFFER_SIZE,
+    OUTPUT_REPORT_IMAGE, IMAGE_COMMAND_V2,
+    V2_COMMAND_RESET, V2_COMMAND_BRIGHTNESS
+};
+use heapless::Vec;
+
+/// V2 Protocol Handler for JPEG-based StreamDeck devices
+#[derive(Debug)]
+pub struct V2Handler {
+    image_buffer: Vec<u8, IMAGE_BUFFER_SIZE>,
+    receiving_image: bool,
+    expected_key: u8,
+    expected_sequence: u16,
+}
+
+impl V2Handler {
+    pub fn new() -> Self {
+        Self {
+            image_buffer: Vec::new(),
+            receiving_image: false,
+            expected_key: 0,
+            expected_sequence: 0,
+        }
+    }
+    
+    /// Reset image reception state
+    fn reset_image_state(&mut self) {
+        self.image_buffer.clear();
+        self.receiving_image = false;
+        self.expected_key = 0;
+        self.expected_sequence = 0;
+    }
+}
+
+impl ProtocolHandlerTrait for V2Handler {
+    fn version(&self) -> ProtocolVersion {
+        ProtocolVersion::V2
+    }
+    
+    fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
+        if data.len() < 8 {
+            return ImageProcessResult::Error("Packet too small for V2 protocol");
+        }
+        
+        // V2 Protocol format: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
+        if data[0] != OUTPUT_REPORT_IMAGE || data[1] != IMAGE_COMMAND_V2 {
+            return ImageProcessResult::Error("Invalid V2 packet header");
+        }
+        
+        let key_id = data[2];
+        let is_last = data[3] != 0;
+        let payload_len = u16::from_le_bytes([data[4], data[5]]);
+        let sequence = u16::from_le_bytes([data[6], data[7]]);
+        
+        // First packet (sequence 0) starts image reception
+        if sequence == 0 {
+            self.reset_image_state();
+            self.receiving_image = true;
+            self.expected_key = key_id;
+            self.expected_sequence = 0;
+        }
+        
+        // Validate sequence and key
+        if !self.receiving_image || key_id != self.expected_key || sequence != self.expected_sequence {
+            self.reset_image_state();
+            return ImageProcessResult::Error("V2 packet sequence error");
+        }
+        
+        // Copy payload data
+        let data_start = 8;
+        let copy_len = (payload_len as usize).min(data.len() - data_start);
+        
+        if copy_len > 0 {
+            if self.image_buffer.extend_from_slice(&data[data_start..data_start + copy_len]).is_err() {
+                self.reset_image_state();
+                return ImageProcessResult::Error("Image buffer overflow");
+            }
+        }
+        
+        self.expected_sequence += 1;
+        
+        if is_last {
+            // Image complete
+            let mut complete_image = Vec::new();
+            let _ = complete_image.extend_from_slice(&self.image_buffer);
+            self.reset_image_state();
+            
+            ImageProcessResult::Complete(complete_image)
+        } else {
+            ImageProcessResult::Incomplete
+        }
+    }
+    
+    fn map_buttons(&self, physical_buttons: &[bool], cols: usize, rows: usize, left_to_right: bool) -> ButtonMapping {
+        let mut mapped_buttons = [false; 32];
+        let total_keys = cols * rows;
+        
+        // V2 devices generally use left-to-right mapping
+        for (physical_idx, &pressed) in physical_buttons.iter().take(total_keys).enumerate() {
+            let mapped_idx = if left_to_right {
+                physical_idx
+            } else {
+                // Right-to-left if needed (rare for V2 devices)
+                let row = physical_idx / cols;
+                let col = physical_idx % cols;
+                let reversed_col = cols - 1 - col;
+                row * cols + reversed_col
+            };
+            
+            if mapped_idx < 32 {
+                mapped_buttons[mapped_idx] = pressed;
+            }
+        }
+        
+        ButtonMapping {
+            mapped_buttons,
+            active_count: total_keys,
+        }
+    }
+    
+    fn hid_descriptor(&self) -> &'static [u8] {
+        // V2 StreamDeck HID descriptor (similar to V1 but optimized for V2 protocol)
+        &[
+            0x05, 0x0c, // Usage Page (Consumer)
+            0x09, 0x01, // Usage (Consumer Control)
+            0xa1, 0x01, // Collection (Application)
+            0x09, 0x01, // Usage (Consumer Control)
+            0x05, 0x09, // Usage Page (Button)
+            0x19, 0x01, // Usage Minimum (0x01)
+            0x29, 0x20, // Usage Maximum (0x20) - Support up to 32 buttons
+            0x15, 0x00, // Logical Minimum (0)
+            0x26, 0xff, 0x00, // Logical Maximum (255)
+            0x75, 0x08, // Report Size (8)
+            0x95, 0x20, // Report Count (32) - Support up to 32 buttons
+            0x85, 0x01, // Report ID (0x01)
+            0x81, 0x02, // Input (Data,Var,Abs)
+            0x0a, 0x00, 0xff, // Usage (Button 255)
+            0x15, 0x00, // Logical Minimum (0)
+            0x26, 0xff, 0x00, // Logical Maximum (255)
+            0x75, 0x08, // Report Size (8)
+            0x96, 0x00, 0x04, // Report Count (1024) - Standard packet size
+            0x85, 0x02, // Report ID (0x02)
+            0x91, 0x02, // Output (Data,Var,Abs)
+            0x0a, 0x00, 0xff, // Usage (Button 255)
+            0x15, 0x00, // Logical Minimum (0)
+            0x26, 0xff, 0x00, // Logical Maximum (255)
+            0x75, 0x08, // Report Size (8)
+            0x95, 0x20, // Report Count (32)
+            0x85, 0x03, // Report ID (0x03)
+            0xb1, 0x04, // Feature (Data,Array,Rel)
+            0x0a, 0x00, 0xff, // Usage (Button 255)
+            0x15, 0x00, // Logical Minimum (0)
+            0x26, 0xff, 0x00, // Logical Maximum (255)
+            0x75, 0x08, // Report Size (8)
+            0x95, 0x20, // Report Count (32)
+            0x85, 0x04, // Report ID (0x04)
+            0xb1, 0x04, // Feature (Data,Array,Rel)
+            0x0a, 0x00, 0xff, // Usage (Button 255)
+            0x15, 0x00, // Logical Minimum (0)
+            0x26, 0xff, 0x00, // Logical Maximum (255)
+            0x75, 0x08, // Report Size (8)
+            0x95, 0x20, // Report Count (32)
+            0x85, 0x05, // Report ID (0x05)
+            0xb1, 0x04, // Feature (Data,Array,Rel)
+            0xc0 // End Collection
+        ]
+    }
+    
+    fn input_report_size(&self, button_count: usize) -> usize {
+        // V2 input reports: 3-byte header + button states
+        3 + button_count
+    }
+    
+    fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
+        if report.len() < 4 {
+            return 0;
+        }
+        
+        // V2 format: [header_bytes, button_states...]
+        report[0] = 0x00; // Header byte 1
+        report[1] = 0x00; // Header byte 2  
+        report[2] = 0x00; // Header byte 3
+        
+        let button_bytes = (buttons.active_count).min(report.len() - 3);
+        for i in 0..button_bytes {
+            report[i + 3] = if buttons.mapped_buttons[i] { 1 } else { 0 };
+        }
+        
+        // Fill remaining bytes with 0
+        for i in (button_bytes + 3)..report.len() {
+            report[i] = 0;
+        }
+        
+        report.len()
+    }
+    
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
+        if report_id == 0x03 && data.len() >= 2 {
+            // V2 commands: [0x03, command_byte, ...]
+            match data[1] {
+                V2_COMMAND_RESET => {
+                    // V2 Reset: [0x03, 0x02, ...]
+                    Some(ProtocolCommand::Reset)
+                }
+                V2_COMMAND_BRIGHTNESS => {
+                    // V2 Brightness: [0x03, 0x08, brightness, ...]
+                    if data.len() >= 3 {
+                        Some(ProtocolCommand::SetBrightness(data[2]))
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+}

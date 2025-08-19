@@ -2,9 +2,13 @@
 name = "productiondeck"
 version = "0.1.0"
 edition = "2021"
-description = "RP2040-based StreamDeck Mini compatible device using Embassy"
+description = "RP2040-based StreamDeck compatible device using Embassy"
 authors = ["ProductionDeck Contributors"]
 license = "MIT OR Apache-2.0"
+
+[lib]
+name = "productiondeck"
+path = "src/lib.rs"
 
 [dependencies]
 # Embassy framework for RP2040 - latest versions
@@ -62,7 +66,38 @@ incremental = false
 opt-level = "z"
 
 [[bin]]
-name = "productiondeck"
+name = "mini"
+path = "src/bin/mini.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "revised-mini"
+path = "src/bin/revised_mini.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "original"
+path = "src/bin/original.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "original-v2"
+path = "src/bin/original_v2.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "xl"
+path = "src/bin/xl.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "plus"
+path = "src/bin/plus.rs"
 test = false
 bench = false
 

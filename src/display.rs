@@ -13,7 +13,8 @@ use embassy_time::{Duration, Timer};
 use heapless::Vec;
 
 use crate::config::*;
-use crate::{DISPLAY_CHANNEL, DisplayCommand};
+use crate::channels::DISPLAY_CHANNEL;
+use crate::types::DisplayCommand;
 
 // ===================================================================
 // Display Controller Structure
@@ -43,7 +44,7 @@ impl DisplayController {
             cs,
             dc,
             rst,
-            current_brightness: DISPLAY_BRIGHTNESS,
+            current_brightness: crate::config::display_brightness(),
         };
 
         // Initialize the display
@@ -53,7 +54,7 @@ impl DisplayController {
     }
 
     async fn init_display(&mut self) {
-        info!("Initializing shared display ({}x{})", DISPLAY_TOTAL_WIDTH, DISPLAY_TOTAL_HEIGHT);
+        info!("Initializing shared display ({}x{})", crate::config::display_total_width(), crate::config::display_total_height());
 
         // Select the display
         self.cs.set_low();
@@ -75,17 +76,17 @@ impl DisplayController {
         self.send_command(ST7735_COLMOD).await;
         self.send_data(&[ST7735_COLOR_MODE_16BIT]).await;
 
-        // Column address set (0 to DISPLAY_TOTAL_WIDTH-1)
+        // Column address set (0 to display_total_width-1)
         self.send_command(ST7735_CASET).await;
-        let width_bytes = (DISPLAY_TOTAL_WIDTH - 1) as u16;
+        let width_bytes = (crate::config::display_total_width() - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start column (0)
             (width_bytes >> 8) as u8, (width_bytes & 0xFF) as u8, // End column
         ]).await;
 
-        // Row address set (0 to DISPLAY_TOTAL_HEIGHT-1)
+        // Row address set (0 to display_total_height-1)
         self.send_command(ST7735_RASET).await;
-        let height_bytes = (DISPLAY_TOTAL_HEIGHT - 1) as u16;
+        let height_bytes = (crate::config::display_total_height() - 1) as u16;
         self.send_data(&[
             0x00, 0x00, // Start row (0)
             (height_bytes >> 8) as u8, (height_bytes & 0xFF) as u8, // End row
@@ -146,20 +147,22 @@ impl DisplayController {
     }
 
     async fn display_image(&mut self, key_id: u8, image_data: &[u8]) {
-        if key_id >= STREAMDECK_KEYS as u8 {
+        if key_id >= crate::config::streamdeck_keys() as u8 {
             warn!("Invalid key_id: {}", key_id);
             return;
         }
 
         info!("Displaying image on key {} region", key_id);
 
-        // Calculate position on shared display (3x2 layout)
-        let col = (key_id as usize) % STREAMDECK_COLS;
-        let row = (key_id as usize) / STREAMDECK_COLS;
-        let x_start = (col * KEY_IMAGE_SIZE) as u16;
-        let y_start = (row * KEY_IMAGE_SIZE) as u16;
-        let x_end = x_start + KEY_IMAGE_SIZE as u16 - 1;
-        let y_end = y_start + KEY_IMAGE_SIZE as u16 - 1;
+        // Calculate position on shared display
+        let cols = crate::config::streamdeck_cols();
+        let col = (key_id as usize) % cols;
+        let row = (key_id as usize) / cols;
+        let image_size = crate::config::key_image_size();
+        let x_start = (col * image_size) as u16;
+        let y_start = (row * image_size) as u16;
+        let x_end = x_start + image_size as u16 - 1;
+        let y_end = y_start + image_size as u16 - 1;
 
         debug!("Key {} maps to region: ({},{}) to ({},{})", 
                key_id, x_start, y_start, x_end, y_end);
@@ -178,7 +181,7 @@ impl DisplayController {
         }
 
         let rgb_data = &image_data[data_offset..];
-        let expected_size = KEY_IMAGE_SIZE * KEY_IMAGE_SIZE * 3;
+        let expected_size = image_size * image_size * 3;
 
         if rgb_data.len() < expected_size {
             warn!("Image data too small: {} bytes, expected: {}", rgb_data.len(), expected_size);
@@ -187,7 +190,7 @@ impl DisplayController {
         }
 
         // Convert RGB888 to RGB565 and send to display
-        let pixel_count = KEY_IMAGE_SIZE * KEY_IMAGE_SIZE;
+        let pixel_count = image_size * image_size;
         let mut buffer = [0u8; 2]; // Buffer for one RGB565 pixel
 
         for i in 0..pixel_count {
@@ -214,7 +217,7 @@ impl DisplayController {
     }
 
     async fn clear_key(&mut self, key_id: u8) {
-        if key_id >= STREAMDECK_KEYS as u8 {
+        if key_id >= crate::config::streamdeck_keys() as u8 {
             warn!("Invalid key_id: {}", key_id);
             return;
         }
@@ -222,12 +225,14 @@ impl DisplayController {
         debug!("Clearing key {} region", key_id);
 
         // Calculate position on shared display
-        let col = (key_id as usize) % STREAMDECK_COLS;
-        let row = (key_id as usize) / STREAMDECK_COLS;
-        let x_start = (col * KEY_IMAGE_SIZE) as u16;
-        let y_start = (row * KEY_IMAGE_SIZE) as u16;
-        let x_end = x_start + KEY_IMAGE_SIZE as u16 - 1;
-        let y_end = y_start + KEY_IMAGE_SIZE as u16 - 1;
+        let cols = crate::config::streamdeck_cols();
+        let col = (key_id as usize) % cols;
+        let row = (key_id as usize) / cols;
+        let image_size = crate::config::key_image_size();
+        let x_start = (col * image_size) as u16;
+        let y_start = (row * image_size) as u16;
+        let x_end = x_start + image_size as u16 - 1;
+        let y_end = y_start + image_size as u16 - 1;
 
         // Select the display
         self.cs.set_low();
@@ -237,7 +242,7 @@ impl DisplayController {
 
         // Fill region with black (RGB565: 0x0000)
         let black_pixel = [0x00, 0x00];
-        for _ in 0..(KEY_IMAGE_SIZE * KEY_IMAGE_SIZE) {
+        for _ in 0..(image_size * image_size) {
             let _ = self.spi.blocking_write(&black_pixel);
         }
 
@@ -254,11 +259,11 @@ impl DisplayController {
         self.cs.set_low();
 
         // Set window to entire display
-        self.set_window(0, 0, DISPLAY_TOTAL_WIDTH as u16 - 1, DISPLAY_TOTAL_HEIGHT as u16 - 1).await;
+        self.set_window(0, 0, crate::config::display_total_width() as u16 - 1, crate::config::display_total_height() as u16 - 1).await;
 
         // Fill entire display with black
         let black_pixel = [0x00, 0x00];
-        for _ in 0..(DISPLAY_TOTAL_WIDTH * DISPLAY_TOTAL_HEIGHT) {
+        for _ in 0..(crate::config::display_total_width() * crate::config::display_total_height()) {
             let _ = self.spi.blocking_write(&black_pixel);
         }
 
@@ -374,7 +379,7 @@ pub async fn display_task(
         spi, cs, dc, rst, bl
     ).await;
 
-    let mut image_buffers: [ImageBuffer; STREAMDECK_KEYS] = Default::default();
+    let mut image_buffers: [ImageBuffer; 32] = Default::default(); // Max keys for any device
     
     // Initialize image buffers
     for buffer in &mut image_buffers {
@@ -397,7 +402,7 @@ pub async fn display_task(
                 controller.set_brightness(brightness).await;
             }
             DisplayCommand::DisplayImage { key_id, data } => {
-                if key_id < STREAMDECK_KEYS as u8 {
+                if key_id < 32 { // Max keys for any device
                     let buffer = &mut image_buffers[key_id as usize];
                     
                     match buffer.add_packet(&data) {

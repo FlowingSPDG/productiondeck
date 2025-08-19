@@ -1,58 +1,148 @@
 //! Hardware configuration for ProductionDeck
-//! RP2040-based StreamDeck Mini compatible device
+//! RP2040-based StreamDeck compatible device with multi-device support
+
+use crate::device::{Device, DeviceConfig};
+use core::sync::atomic::{AtomicU16, Ordering};
 
 // ===================================================================
-// USB Configuration - CRITICAL: Must match StreamDeck Mini
+// Device Selection Configuration
 // ===================================================================
 
-pub const USB_VID: u16 = 0x0fd9; // Elgato Systems VID
-pub const USB_PID: u16 = 0x0063; // StreamDeck Mini PID
-pub const USB_MANUFACTURER: &str = "Elgato Systems";
-pub const USB_PRODUCT: &str = "Stream Deck Mini";
-// Serial is provided at compile-time from build.rs as an env var; fallback to a static value if missing.
-// Use a fixed 12-character uppercase alphanumeric serial to match real device length
+/// Current device PID (can be changed at runtime via device selection)
+/// Default to StreamDeck Mini (0x0063) for backward compatibility
+static CURRENT_DEVICE_PID: AtomicU16 = AtomicU16::new(0x0063);
+
+/// Set the current device type by PID
+pub fn set_device_pid(pid: u16) -> Result<(), &'static str> {
+    if Device::from_pid(pid).is_some() {
+        CURRENT_DEVICE_PID.store(pid, Ordering::Relaxed);
+        Ok(())
+    } else {
+        Err("Unsupported device PID")
+    }
+}
+
+/// Get the current device PID
+pub fn get_device_pid() -> u16 {
+    CURRENT_DEVICE_PID.load(Ordering::Relaxed)
+}
+
+/// Get the current device configuration
+pub fn get_current_device() -> Device {
+    let pid = get_device_pid();
+    Device::from_pid(pid).unwrap_or_else(|| {
+        // Fallback to Mini if current PID is invalid
+        CURRENT_DEVICE_PID.store(0x0063, Ordering::Relaxed);
+        Device::Mini
+    })
+}
+
+// ===================================================================
+// USB Configuration - Dynamic based on current device
+// ===================================================================
+
+pub fn usb_vid() -> u16 {
+    get_current_device().usb_config().vid
+}
+
+pub fn usb_pid() -> u16 {
+    get_current_device().usb_config().pid
+}
+
+pub fn usb_manufacturer() -> &'static str {
+    get_current_device().usb_config().manufacturer
+}
+
+pub fn usb_product() -> &'static str {
+    get_current_device().usb_config().product_name
+}
+
+/// Serial number (static for all devices)
 pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
 
-// USB version settings to match real StreamDeck Mini
-pub const USB_BCD_DEVICE: u16 = 0x0200; // Device version 2.0 (matches real device)
+/// USB version settings
+pub const USB_BCD_DEVICE: u16 = 0x0200; // Device version 2.0
 
 // ===================================================================
-// Device Specifications (StreamDeck Mini)
+// Device Specifications - Dynamic based on current device  
 // ===================================================================
 
-pub const STREAMDECK_KEYS: usize = 6; // Number of keys (3x2 layout)
-pub const STREAMDECK_COLS: usize = 3; // Keys per row
-pub const STREAMDECK_ROWS: usize = 2; // Number of rows
-pub const KEY_IMAGE_SIZE: usize = 72; // 72x72 pixels per key
-pub const KEY_IMAGE_BYTES: usize = KEY_IMAGE_SIZE * KEY_IMAGE_SIZE * 3; // RGB
+pub fn streamdeck_keys() -> usize {
+    get_current_device().button_layout().total_keys
+}
+
+pub fn streamdeck_cols() -> usize {
+    get_current_device().button_layout().cols
+}
+
+pub fn streamdeck_rows() -> usize {
+    get_current_device().button_layout().rows
+}
+
+pub fn key_image_size() -> usize {
+    let display = get_current_device().display_config();
+    display.image_width // Assume square images
+}
+
+pub fn key_image_bytes() -> usize {
+    let display = get_current_device().display_config();
+    display.image_width * display.image_height * 3 // RGB
+}
 
 // ===================================================================
-// USB HID Configuration
+// USB HID Configuration - Dynamic based on current device
 // ===================================================================
 
-pub const HID_REPORT_SIZE_INPUT: usize = 16; // Button state report size (actual size used)
-pub const HID_REPORT_SIZE_FEATURE: usize = 32; // Feature report size
+pub fn hid_report_size_input() -> usize {
+    get_current_device().input_report_size()
+}
+
+pub fn hid_report_size_feature() -> usize {
+    get_current_device().feature_report_size()
+}
+
+pub fn hid_report_size_output() -> usize {
+    get_current_device().output_report_size()
+}
 
 // ===================================================================
 // GPIO Pin Assignments - Raspberry Pi Pico
 // ===================================================================
 
-// Button Matrix (6 buttons arranged as 3x2) - Currently used in main.rs
-pub const BTN_ROW_PINS: [u8; STREAMDECK_ROWS] = [2, 3]; // GPIO 2, 3
-pub const BTN_COL_PINS: [u8; STREAMDECK_COLS] = [4, 5, 6]; // GPIO 4, 5, 6
+// Button Matrix - Dynamic sizing based on device
+pub fn btn_row_pins() -> &'static [u8] {
+    let rows = streamdeck_rows();
+    match rows {
+        2 => &[2, 3],                    // Mini: 2 rows
+        3 => &[2, 3, 7],                 // Original: 3 rows
+        4 => &[2, 3, 7, 9],              // XL: 4 rows
+        _ => &[2, 3],                    // Fallback to 2 rows
+    }
+}
 
-// SPI Display Interface - Currently disabled in main.rs
+pub fn btn_col_pins() -> &'static [u8] {
+    let cols = streamdeck_cols();
+    match cols {
+        3 => &[4, 5, 6],                     // Mini: 3 cols
+        4 => &[4, 5, 6, 10],                 // Plus: 4 cols  
+        5 => &[4, 5, 6, 10, 11],             // Original: 5 cols
+        8 => &[4, 5, 6, 10, 11, 12, 13, 16], // XL: 8 cols
+        _ => &[4, 5, 6],                     // Fallback to 3 cols
+    }
+}
+
+// SPI Display Interface
 pub const SPI_MOSI_PIN: u8 = 19; // Data to display
 pub const SPI_SCK_PIN: u8 = 18; // Clock to display
 pub const SPI_BAUDRATE: u32 = 10_000_000; // 10MHz SPI clock
 
-// Single Display Control Pins - Currently disabled in main.rs
+// Single Display Control Pins
 pub const DISPLAY_CS_PIN: u8 = 8; // Chip select
 pub const DISPLAY_DC_PIN: u8 = 14; // Data/Command select
 pub const DISPLAY_RST_PIN: u8 = 15; // Reset
 pub const DISPLAY_BL_PIN: u8 = 17; // Backlight control (PWM)
 
-// Status LEDs - Currently used in main.rs
+// Status LEDs
 pub const LED_STATUS_PIN: u8 = 25; // Built-in LED on Pico
 pub const LED_USB_PIN: u8 = 20; // USB status LED
 pub const LED_ERROR_PIN: u8 = 21; // Error indication LED
@@ -64,16 +154,22 @@ pub const LED_ERROR_PIN: u8 = 21; // Error indication LED
 pub const BUTTON_DEBOUNCE_MS: u64 = 20; // Button debounce time
 pub const BUTTON_SCAN_RATE_HZ: u64 = 100; // Button scan frequency
 
-// Display configuration
-pub const DISPLAY_BRIGHTNESS: u8 = 255; // Default brightness (0-255)
-pub const DISPLAY_TOTAL_WIDTH: usize = STREAMDECK_COLS * KEY_IMAGE_SIZE; // 216 pixels
-pub const DISPLAY_TOTAL_HEIGHT: usize = STREAMDECK_ROWS * KEY_IMAGE_SIZE; // 144 pixels
+// Display configuration - Dynamic
+pub fn display_brightness() -> u8 {
+    255 // Default brightness (0-255)
+}
+
+pub fn display_total_width() -> usize {
+    streamdeck_cols() * key_image_size()
+}
+
+pub fn display_total_height() -> usize {
+    streamdeck_rows() * key_image_size()
+}
 
 // USB Configuration
 pub const USB_POLL_RATE_MS: u64 = 1; // 1ms USB polling (1000Hz)
-pub const IMAGE_BUFFER_SIZE: usize = 1024; // 1KB buffer size (reduced to prevent HardFault)
-
-// Development options
+pub const IMAGE_BUFFER_SIZE: usize = 1024; // 1KB buffer size
 
 // ===================================================================
 // USB HID Report IDs and Commands
@@ -124,3 +220,23 @@ pub const ST7735_COLOR_MODE_16BIT: u8 = 0x05; // RGB565 format
 pub const RGB565_RED_MASK: u16 = 0xF8;
 pub const RGB565_GREEN_MASK: u16 = 0xFC;
 pub const RGB565_BLUE_SHIFT: u8 = 3;
+
+// ===================================================================
+// Backward Compatibility Constants
+// ===================================================================
+
+/// Backward compatibility - use dynamic functions instead
+#[deprecated(note = "Use streamdeck_keys() function instead")]
+pub const STREAMDECK_KEYS: usize = 6;
+
+#[deprecated(note = "Use streamdeck_cols() function instead")]
+pub const STREAMDECK_COLS: usize = 3;
+
+#[deprecated(note = "Use streamdeck_rows() function instead")]  
+pub const STREAMDECK_ROWS: usize = 2;
+
+#[deprecated(note = "Use key_image_size() function instead")]
+pub const KEY_IMAGE_SIZE: usize = 80;
+
+#[deprecated(note = "Use key_image_bytes() function instead")]
+pub const KEY_IMAGE_BYTES: usize = 80 * 80 * 3;
