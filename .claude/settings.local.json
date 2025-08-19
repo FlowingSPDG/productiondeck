@@ -17,10 +17,11 @@
       "WebFetch(domain:github.com)",
       "mcp__serena__think_about_collected_information",
       "Bash(cargo build:*)",
-      "mcp__serena__find_symbol"
+      "mcp__serena__find_symbol",
+      "Bash(gh issue view:*)",
+      "WebFetch(domain:docs.elgato.com)"
     ],
     "deny": [
-      "Bash(git add:*)"
     ]
   }
 }

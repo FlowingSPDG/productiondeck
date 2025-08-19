@@ -8,13 +8,42 @@
 
 ## 🚀 Features
 
-- **Full StreamDeck Mini Compatibility** - Works with official StreamDeck software
 - **USB HID Protocol** - Exact implementation of Elgato's communication protocol
 - **6 Programmable Keys** - 3x2 button layout with shared TFT display
 - **80x80 Pixel Display** - Full-color LCD display shared by all keys
 - **Plug-and-Play** - Recognized as authentic StreamDeck Mini by Windows/macOS/Linux
 - **Open Source** - Complete firmware source code
 - **RP2040 Based** - Uses the powerful dual-core Raspberry Pi Pico microcontroller
+
+## 🔄 Device Compatibility
+
+### StreamDeck Product Support Matrix
+
+| Product | Buttons | Display | USB Protocol | Status |
+|---------|---------|---------|--------------|--------|
+| **StreamDeck Original** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck V2** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Neo** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Scissor Keys** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Plus** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck XL** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Mini** | ✅ | ⚠️ | ✅ | Alpha |
+| **StreamDeck Pedal** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Studio** | ❌ | ❌ | ❌ | Not implemented |
+| **StreamDeck Mobile** | N/A | N/A | N/A | Not Planned |
+
+### Implementation Status Legend
+- ✅ **Fully implemented and working**
+- ⚠️ **Implemented but disabled** (due to memory issues)
+- ❌ **Not implemented**
+
+### Current StreamDeck Mini Status
+- **USB Protocol**: ✅ Complete HID implementation, device enumeration working
+- **Button Input**: ✅ 6-button matrix scanning with debouncing (3x2 layout)
+- **Display Output**: ⚠️ ST7735 driver implemented but disabled due to buffer memory issues
+- **Software Compatibility**: ✅ Recognized as authentic StreamDeck Mini by official software
+
+**Note**: Only StreamDeck Mini is currently targeted. Other StreamDeck variants require different USB protocols, button layouts, and display configurations.
 
 ## 📋 Hardware Requirements
 
