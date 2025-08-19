@@ -336,47 +336,34 @@ async fn usb_task_impl(
         let receiver = BUTTON_CHANNEL.receiver();
         let protocol_handler = ProtocolHandler::create(device.usb_config().protocol);
         
-        // Send initial button state report (all buttons released)
-        // Use protocol-specific input report size for consistency
-        let input_size = protocol_handler.input_report_size(device.button_layout().total_keys);
-        let mut initial_report = [0u8; 64]; // Fixed size buffer for reports
-        let report_len = input_size.min(64);
-        if report_len > 0 {
-            initial_report[0] = 0x01; // Report ID for input reports
-            match writer.write(&initial_report[..report_len]).await {
-                Ok(()) => {
-                    info!("Initial button state report sent ({} bytes)", report_len);
-                }
-                Err(e) => {
-                    warn!("Failed to send initial button report: {:?}", e);
-                }
-            }
-        }
+        // Do not send initial button state; only send on changes
         
         loop {
             // Wait for button state updates
             let button_state = receiver.receive().await;
             
-            // Map physical buttons to protocol format
-            let layout = device.button_layout();
-            let button_mapping = protocol_handler.map_buttons(
-                &button_state.buttons, 
-                layout.cols, 
-                layout.rows, 
-                layout.left_to_right
-            );
-            
-            // Format button report
-            let mut report = [0u8; 64]; // Fixed size buffer for reports
-            let report_len = protocol_handler.format_button_report(&button_mapping, &mut report);
-            
-            if report_len > 0 {
-                match writer.write(&report[..report_len]).await {
-                    Ok(()) => {
-                        debug!("Button report sent ({} bytes)", report_len);
-                    }
-                    Err(e) => {
-                        warn!("Failed to send button report: {:?}", e);
+            if button_state.changed {
+                // Map physical buttons to protocol format
+                let layout = device.button_layout();
+                let button_mapping = protocol_handler.map_buttons(
+                    &button_state.buttons, 
+                    layout.cols, 
+                    layout.rows, 
+                    layout.left_to_right
+                );
+                
+                // Format button report
+                let mut report = [0u8; 64]; // Fixed size buffer for reports
+                let report_len = protocol_handler.format_button_report(&button_mapping, &mut report);
+                
+                if report_len > 0 {
+                    match writer.write(&report[..report_len]).await {
+                        Ok(()) => {
+                            debug!("Button report sent ({} bytes)", report_len);
+                        }
+                        Err(e) => {
+                            warn!("Failed to send button report: {:?}", e);
+                        }
                     }
                 }
             }

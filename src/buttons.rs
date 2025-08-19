@@ -146,7 +146,6 @@ pub async fn button_task_matrix(
 
     let scan_interval = Duration::from_millis(1000 / BUTTON_SCAN_RATE_HZ);
     let sender = BUTTON_CHANNEL.sender();
-    let mut last_send = Instant::now();
 
     info!("Button matrix initialized - scanning at {}Hz", BUTTON_SCAN_RATE_HZ);
 
@@ -168,14 +167,12 @@ pub async fn button_task_matrix(
             new_state.set_button(i, debouncer.get_state(i));
         }
 
-        // Send state if changed or heartbeat interval elapsed
-        let now = Instant::now();
-        if changed || now.duration_since(last_send) >= Duration::from_millis(250) {
-            new_state.changed = changed;
+        // Send state if changed
+        if changed {
+            new_state.changed = true;
             sender.send(new_state).await;
             debug!("Button state sent: {:?}", new_state.buttons);
             _last_button_state = new_state;
-            last_send = now;
         }
 
         // Wait for next scan
