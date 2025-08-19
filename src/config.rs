@@ -2,7 +2,7 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig};
-use core::sync::atomic::{AtomicU16, Ordering};
+use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
 // ===================================================================
 // Device Selection Configuration
@@ -35,6 +35,35 @@ pub fn get_current_device() -> Device {
         CURRENT_DEVICE_PID.store(0x0063, Ordering::Relaxed);
         Device::Mini
     })
+}
+
+// ===================================================================
+// Button Input Mode Configuration
+// ===================================================================
+
+/// Button input mode selector
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ButtonInputMode {
+    /// Traditional key matrix scanning (uses fewer GPIOs)
+    Matrix = 0,
+    /// Direct pin reading (one GPIO per key)
+    Direct = 1,
+}
+
+/// Current button input mode (defaults to Matrix)
+static BUTTON_INPUT_MODE: AtomicU8 = AtomicU8::new(ButtonInputMode::Matrix as u8);
+
+/// Set the current button input mode
+pub fn set_button_input_mode(mode: ButtonInputMode) {
+    BUTTON_INPUT_MODE.store(mode as u8, Ordering::Relaxed);
+}
+
+/// Get the current button input mode
+pub fn button_input_mode() -> ButtonInputMode {
+    match BUTTON_INPUT_MODE.load(Ordering::Relaxed) {
+        1 => ButtonInputMode::Direct,
+        _ => ButtonInputMode::Matrix,
+    }
 }
 
 // ===================================================================

@@ -14,7 +14,7 @@ use heapless::Vec;
 use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::usb::usb_task_for_device;
-use crate::buttons::button_task;
+use crate::buttons::{button_task_matrix, button_task_direct};
 
 /// Hardware configuration for a specific StreamDeck device
 pub struct HardwareConfig {
@@ -146,7 +146,7 @@ fn create_all_pins_for_device(
     Output<'static>, 
     Output<'static>,
     Vec<Output<'static>, 4>, 
-    Vec<Input<'static>, 8>
+    Vec<Input<'static>, 32>
 ) {
     
     // Create USB driver and LEDs first
@@ -158,7 +158,7 @@ fn create_all_pins_for_device(
     // Create button pins
     let layout = device.button_layout();
     let mut row_pins: Vec<Output<'static>, 4> = Vec::new();
-    let mut col_pins: Vec<Input<'static>, 8> = Vec::new();
+    let mut col_pins: Vec<Input<'static>, 32> = Vec::new();
     
     match (layout.rows, layout.cols) {
         (2, 3) => {
@@ -187,18 +187,43 @@ fn create_all_pins_for_device(
 fn spawn_button_task_with_pins(
     spawner: &Spawner,
     mut row_pins: Vec<Output<'static>, 4>,
-    mut col_pins: Vec<Input<'static>, 8>,
-    _device: Device,
+    mut col_pins: Vec<Input<'static>, 32>,
+    device: Device,
 ) -> Result<(), SpawnError> {
-    // For now, hardcode to Mini layout since button_task expects specific pins
-    // Extract the pins we need (this will panic if not enough pins, but that's a dev error)
-    let row0 = row_pins.pop().unwrap();
-    let row1 = row_pins.pop().unwrap();
-    let col0 = col_pins.pop().unwrap();
-    let col1 = col_pins.pop().unwrap(); 
-    let col2 = col_pins.pop().unwrap();
-    
-    spawner.spawn(button_task(row0, row1, col0, col1, col2))
+    match crate::config::button_input_mode() {
+        crate::config::ButtonInputMode::Matrix => {
+            // Extract pins for matrix task based on device layout
+            let layout = device.button_layout();
+            match (layout.rows, layout.cols) {
+                (2, 3) => {
+                    let row0 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                }
+                _ => {
+                    // Until wider matrix support lands, warn and use first 2x3
+                    warn!("Matrix mode not fully implemented for this device; using Mini layout subset");
+                    let row0 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                }
+            }
+        }
+        crate::config::ButtonInputMode::Direct => {
+            // Use as many input pins as available up to 32
+            let mut inputs: heapless::Vec<Input<'static>, 32> = heapless::Vec::new();
+            while let Some(pin) = col_pins.pop() {
+                let _ = inputs.push(pin);
+            }
+            spawner.spawn(button_task_direct(inputs))
+        }
+    }
 }
 
 
