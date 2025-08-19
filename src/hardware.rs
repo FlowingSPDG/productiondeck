@@ -9,6 +9,8 @@ use embassy_rp::{peripherals, Peripherals};
 use embassy_rp::usb::Driver;
 use defmt::*;
 use heapless::Vec;
+use embassy_sync::channel::Channel;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 
 use crate::config;
@@ -104,6 +106,49 @@ pub async fn init_hardware_tasks_for_device(
 ) -> Result<(), SpawnError> {
     let hw_config = HardwareConfig::for_device(device);
     init_hardware_tasks_with_config(spawner, p, &hw_config).await
+}
+
+/// Initialize and spawn core 0 tasks (USB, buttons) for multicore setup
+pub async fn init_hardware_tasks_core0(
+    spawner: &Spawner,
+    device: Device,
+) -> Result<(), SpawnError> {
+    let p = embassy_rp::init(Default::default());
+    let hw_config = HardwareConfig::for_device(device);
+    
+    info!("Core 0: Initializing hardware for {}", hw_config.device.device_name());
+    
+    // Create all pins and return them with the USB driver
+    let (driver, usb_led, status_led, error_led, row_pins, col_pins) = 
+        create_all_pins_for_device(p, hw_config.device);
+    
+    // Spawn USB task
+    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
+    
+    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
+    if matches!(device, crate::device::Device::Mini | crate::device::Device::RevisedMini) {
+        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
+    }
+
+    // Spawn button task with device-specific layout
+    spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
+    
+    // Spawn status LED task
+    spawner.spawn(status_task(status_led, error_led))?;
+    
+    Ok(())
+}
+
+/// Initialize and spawn core 1 tasks (display, image processing) for multicore setup
+pub async fn init_hardware_tasks_core1(
+    device: Device,
+) -> Result<(), SpawnError> {
+    info!("Core 1: Initializing image processing tasks for {}", device.device_name());
+    
+    // TODO: Initialize display hardware and spawn display task
+    // For now, just return success as display is not yet implemented
+    
+    Ok(())
 }
 
 /// Initialize and spawn all hardware tasks with given configuration

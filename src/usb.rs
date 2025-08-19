@@ -325,6 +325,8 @@ async fn usb_task_impl(
                 }
                 UsbCommand::ImageData { key_id, data } => {
                     debug!("Processing image data for key {} ({} bytes)", key_id, data.len());
+                    // Send to core 1 for processing via inter-core channel
+                    // TODO: Replace with actual inter-core channel when implemented
                     let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::DisplayImage { key_id, data }).await;
                 }
             }
