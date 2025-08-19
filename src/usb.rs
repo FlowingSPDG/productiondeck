@@ -298,13 +298,13 @@ async fn usb_task_impl(
     
     static mut HID_STATE: State = State::new();
     #[allow(static_mut_refs)]
-    let hid = unsafe { HidReaderWriter::<_, 64, 64>::new(&mut builder, &mut HID_STATE, hid_config) };
+    let hid = unsafe { HidReaderWriter::<_, 64, 1024>::new(&mut builder, &mut HID_STATE, hid_config) };
 
     // Build USB device
     let mut usb = builder.build();
 
     // Split HID into reader and writer
-    let (_reader, mut writer) = hid.split();
+    let (mut reader, mut writer) = hid.split();
 
     // Spawn USB device task
     let usb_fut = usb.run();
@@ -331,43 +331,78 @@ async fn usb_task_impl(
         }
     };
 
-    // Spawn button report sender
-    let button_fut = async {
+    // Spawn combined IO future: send button reports and read OUT image packets
+    let io_fut = async {
         let receiver = BUTTON_CHANNEL.receiver();
         let protocol_handler = ProtocolHandler::create(device.usb_config().protocol);
-        
-        // Do not send initial button state; only send on changes
-        
-        loop {
-            // Wait for button state updates
-            let button_state = receiver.receive().await;
-            
-            if button_state.changed {
-                // Map physical buttons to protocol format
-                let layout = device.button_layout();
-                let button_mapping = protocol_handler.map_buttons(
-                    &button_state.buttons, 
-                    layout.cols, 
-                    layout.rows, 
-                    layout.left_to_right
-                );
-                
-                // Format button report
-                let mut report = [0u8; 64]; // Fixed size buffer for reports
-                let report_len = protocol_handler.format_button_report(&button_mapping, &mut report);
-                
-                if report_len > 0 {
-                    match writer.write(&report[..report_len]).await {
-                        Ok(()) => {
-                            debug!("Button report sent ({} bytes)", report_len);
-                        }
-                        Err(e) => {
-                            warn!("Failed to send button report: {:?}", e);
+
+        // OUT image reader protocol state
+        let mut out_protocol = ProtocolHandler::create(device.usb_config().protocol);
+        let mut out_buf = [0u8; 1024];
+
+        // Button sender loop
+        let button_loop = async {
+            loop {
+                let button_state = receiver.receive().await;
+
+                if button_state.changed {
+                    let layout = device.button_layout();
+                    let button_mapping = protocol_handler.map_buttons(
+                        &button_state.buttons,
+                        layout.cols,
+                        layout.rows,
+                        layout.left_to_right,
+                    );
+
+                    let mut report = [0u8; 64];
+                    let report_len = protocol_handler.format_button_report(&button_mapping, &mut report);
+
+                    if report_len > 0 {
+                        match writer.write(&report[..report_len]).await {
+                            Ok(()) => {
+                                debug!("Button report sent ({} bytes)", report_len);
+                            }
+                            Err(e) => {
+                                warn!("Failed to send button report: {:?}", e);
+                            }
                         }
                     }
                 }
             }
-        }
+        };
+
+        // OUT endpoint reader loop
+        let out_loop = async {
+            loop {
+                match reader.read(&mut out_buf).await {
+                    Ok(n) => {
+                        let data = &out_buf[..n];
+                        if !data.is_empty() {
+                            match out_protocol.process_image_packet(data) {
+                                ImageProcessResult::Complete(image_data) => {
+                                    // Extract key id robustly: try V2 ([0x02,0x07,key,..]) or stripped ([0x07,key,..])
+                                    let key_guess = if data.len() >= 3 && data[0] == 0x02 { data[2] } else if data.len() >= 2 { data[1] } else { 0 };
+                                    let img_len = image_data.len();
+                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(UsbCommand::ImageData { key_id: key_guess, data: image_data });
+                                    info!("Image complete for key {} ({} bytes)", key_guess, img_len);
+                                }
+                                ImageProcessResult::Incomplete => {
+                                    // Silent - most packets are incomplete until final one
+                                }
+                                ImageProcessResult::Error(_err) => {
+                                    // Should not occur with current tolerant parsers, but keep silent
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!("HID OUT read error: {:?}", e);
+                    }
+                }
+            }
+        };
+
+        embassy_futures::join::join(button_loop, out_loop).await;
     };
 
     // USB status LED control
@@ -380,5 +415,5 @@ async fn usb_task_impl(
     };
 
     // Run all futures concurrently
-    embassy_futures::join::join4(usb_fut, command_fut, button_fut, led_fut).await;
+    embassy_futures::join::join4(usb_fut, command_fut, io_fut, led_fut).await;
 }

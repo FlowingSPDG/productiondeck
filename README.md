@@ -11,7 +11,7 @@
 - **Multi-Device Support** - Supports 6 different StreamDeck models with dedicated firmware binaries
 - **USB HID Protocol** - Exact implementation of Elgato's communication protocols (V1 BMP and V2 JPEG)
 - **Device-Specific Binaries** - Compile-time optimized firmware for each model
-- **Plug-and-Play** - Recognized as authentic StreamDeck devices by Windows/macOS/Linux
+- **Plug-and-Play** - Recognized as authentic StreamDeck devices by Windows/macOS
 - **Open Source** - Complete firmware source code with modular architecture
 - **RP2040 Based** - Uses the powerful dual-core Raspberry Pi Pico microcontroller
 
@@ -32,6 +32,7 @@ Build device-specific firmware using: `cargo run --bin <device-name>`
 | **StreamDeck Pedal** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Studio** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Mobile** | N/A | N/A | N/A | Not Planned |
+| **StreamDeck Module** | N/A | N/A | N/A | Not implemented |
 
 ### Implementation Status Legend
 - ✅ **Fully implemented and working**
@@ -40,7 +41,7 @@ Build device-specific firmware using: `cargo run --bin <device-name>`
 
 ### Current StreamDeck Mini Status
 - **USB Protocol**: ✅ Complete HID implementation, device enumeration working
-- **Button Input**: ✅ 6-button matrix scanning with debouncing (3x2 layout)
+- **Button Input**: ✅ 6-button matrix scanning with debouncing
 - **Display Output**: ⚠️ ST7735 driver implemented but disabled due to buffer memory issues
 - **Software Compatibility**: ✅ Recognized as authentic StreamDeck Mini by official software
 
@@ -51,7 +52,7 @@ Build device-specific firmware using: `cargo run --bin <device-name>`
 ### Core Components
 - **Raspberry Pi Pico** (RP2040 microcontroller)
 - **1x ST7735 TFT Display** (80x80 pixels, SPI interface) - shared by all buttons
-- **6x Tactile Switches** (for button matrix)
+- **6x Tactile Switches** 
 - **Basic passive components** (resistors, capacitors)
 
 ### Optional Components

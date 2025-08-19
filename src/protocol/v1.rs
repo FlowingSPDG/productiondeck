@@ -44,16 +44,19 @@ impl ProtocolHandlerTrait for V1Handler {
     
     fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
         if data.len() < 8 {
-            return ImageProcessResult::Error("Packet too small for V1 protocol");
+            // Swallow malformed packets to avoid host-side errors
+            return ImageProcessResult::Incomplete;
         }
         
-        // V1 Protocol format: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
-        if data[0] != 0x02 || data[1] != 0x01 {
-            return ImageProcessResult::Error("Invalid V1 packet header");
-        }
-        
-        let packet_num = data[2];
-        let key_id = data[5];
+        // V1 Protocol format primary: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
+        // Accept variant where report ID (0x02) is stripped by HID stack: [0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, data...]
+        let (packet_num, key_id, data_start) = if data[0] == 0x02 && data.len() >= 6 {
+            (data[2], data[5], 8)
+        } else if data[0] == 0x01 && data.len() >= 5 {
+            (data[1], data[4], 7)
+        } else {
+            return ImageProcessResult::Incomplete;
+        };
         
         // First packet starts image reception
         if packet_num == 0x01 {
@@ -62,22 +65,20 @@ impl ProtocolHandlerTrait for V1Handler {
             self.expected_key = key_id;
             
             // Skip header and copy image data
-            let data_start = 8;
             if data.len() > data_start {
                 if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
                     self.reset_image_state();
-                    return ImageProcessResult::Error("Image buffer overflow");
+                    return ImageProcessResult::Incomplete;
                 }
             }
             
             ImageProcessResult::Incomplete
         } else if packet_num == 0x02 && self.receiving_image && key_id == self.expected_key {
             // Second packet completes the image
-            let data_start = 8;
             if data.len() > data_start {
                 if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
                     self.reset_image_state();
-                    return ImageProcessResult::Error("Image buffer overflow");
+                    return ImageProcessResult::Incomplete;
                 }
             }
             
@@ -88,7 +89,8 @@ impl ProtocolHandlerTrait for V1Handler {
             
             ImageProcessResult::Complete(complete_image)
         } else {
-            ImageProcessResult::Error("Invalid V1 packet sequence")
+            // Ignore unexpected sequences for now
+            ImageProcessResult::Incomplete
         }
     }
     

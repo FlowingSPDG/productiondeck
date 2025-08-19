@@ -46,19 +46,21 @@ impl ProtocolHandlerTrait for V2Handler {
     
     fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
         if data.len() < 8 {
-            return ImageProcessResult::Error("Packet too small for V2 protocol");
+            // Swallow malformed packets to avoid host-side errors
+            return ImageProcessResult::Incomplete;
         }
         
-        // V2 Protocol format: [0x02, 0x07, key_id, is_last, len_low, len_high, seq_low, seq_high, data...]
-        if data[0] != OUTPUT_REPORT_IMAGE || data[1] != IMAGE_COMMAND_V2 {
-            return ImageProcessResult::Error("Invalid V2 packet header");
-        }
-        
-        let key_id = data[2];
-        let is_last = data[3] != 0;
-        let payload_len = u16::from_le_bytes([data[4], data[5]]);
-        let sequence = u16::from_le_bytes([data[6], data[7]]);
-        
+        // V2 Protocol format primary: [0x02, 0x07, key_id, is_last, len_lo, len_hi, seq_lo, seq_hi, data...]
+        // Some HID stacks strip the report ID before delivering data to set_report. Accept both forms.
+        let (key_id, is_last, payload_len, sequence, data_start) = if data[0] == OUTPUT_REPORT_IMAGE && data[1] == IMAGE_COMMAND_V2 {
+            (data[2], data[3] != 0, u16::from_le_bytes([data[4], data[5]]), u16::from_le_bytes([data[6], data[7]]), 8)
+        } else if data[0] == IMAGE_COMMAND_V2 && data.len() >= 7 {
+            // Missing report ID (0x02) case: [0x07, key_id, is_last, len_lo, len_hi, seq_lo, seq_hi, data...]
+            (data[1], data[2] != 0, u16::from_le_bytes([data[3], data[4]]), u16::from_le_bytes([data[5], data[6]]), 7)
+        } else {
+            return ImageProcessResult::Incomplete;
+        };
+
         // First packet (sequence 0) starts image reception
         if sequence == 0 {
             self.reset_image_state();
@@ -69,18 +71,18 @@ impl ProtocolHandlerTrait for V2Handler {
         
         // Validate sequence and key
         if !self.receiving_image || key_id != self.expected_key || sequence != self.expected_sequence {
+            // Reset and ignore to keep host happy
             self.reset_image_state();
-            return ImageProcessResult::Error("V2 packet sequence error");
+            return ImageProcessResult::Incomplete;
         }
         
         // Copy payload data
-        let data_start = 8;
         let copy_len = (payload_len as usize).min(data.len() - data_start);
         
         if copy_len > 0 {
             if self.image_buffer.extend_from_slice(&data[data_start..data_start + copy_len]).is_err() {
                 self.reset_image_state();
-                return ImageProcessResult::Error("Image buffer overflow");
+                return ImageProcessResult::Incomplete;
             }
         }
         
