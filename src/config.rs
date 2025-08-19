@@ -2,7 +2,7 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig};
-use core::sync::atomic::{AtomicU16, Ordering};
+use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
 
 // ===================================================================
 // Device Selection Configuration
@@ -35,6 +35,35 @@ pub fn get_current_device() -> Device {
         CURRENT_DEVICE_PID.store(0x0063, Ordering::Relaxed);
         Device::Mini
     })
+}
+
+// ===================================================================
+// Button Input Mode Configuration
+// ===================================================================
+
+/// Button input mode selector
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ButtonInputMode {
+    /// Traditional key matrix scanning (uses fewer GPIOs)
+    Matrix = 0,
+    /// Direct pin reading (one GPIO per key)
+    Direct = 1,
+}
+
+/// Current button input mode (defaults to Matrix)
+static BUTTON_INPUT_MODE: AtomicU8 = AtomicU8::new(ButtonInputMode::Matrix as u8);
+
+/// Set the current button input mode
+pub fn set_button_input_mode(mode: ButtonInputMode) {
+    BUTTON_INPUT_MODE.store(mode as u8, Ordering::Relaxed);
+}
+
+/// Get the current button input mode
+pub fn button_input_mode() -> ButtonInputMode {
+    match BUTTON_INPUT_MODE.load(Ordering::Relaxed) {
+        1 => ButtonInputMode::Direct,
+        _ => ButtonInputMode::Matrix,
+    }
 }
 
 // ===================================================================
@@ -131,6 +160,18 @@ pub fn btn_col_pins() -> &'static [u8] {
     }
 }
 
+/// Direct input pin assignments (one GPIO per button)
+/// For Mini (6 keys), use six dedicated pins.
+pub fn btn_direct_pins() -> &'static [u8] {
+    let keys = streamdeck_keys();
+    match keys {
+        // StreamDeck Mini and Revised Mini (6 keys)
+        6 => &[4, 5, 6, 10, 11, 12],
+        // Fallback: re-use column pins (may not cover all keys)
+        _ => btn_col_pins(),
+    }
+}
+
 // SPI Display Interface
 pub const SPI_MOSI_PIN: u8 = 19; // Data to display
 pub const SPI_SCK_PIN: u8 = 18; // Clock to display
@@ -169,7 +210,12 @@ pub fn display_total_height() -> usize {
 
 // USB Configuration
 pub const USB_POLL_RATE_MS: u64 = 1; // 1ms USB polling (1000Hz)
-pub const IMAGE_BUFFER_SIZE: usize = 1024; // 1KB buffer size
+pub const IMAGE_BUFFER_SIZE: usize = 4096; // 4KB buffer size (increased for better performance)
+
+// Image processing optimization
+pub const IMAGE_PROCESSING_BUFFER_SIZE: usize = 8192; // 8KB for image processing
+pub const DISPLAY_BUFFER_SIZE: usize = 2048; // 2KB for display operations
+pub const MULTICORE_CHANNEL_SIZE: usize = 8; // Increased channel size for better throughput
 
 // ===================================================================
 // USB HID Report IDs and Commands

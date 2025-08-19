@@ -121,14 +121,14 @@ impl ButtonMatrix {
 // ===================================================================
 
 #[embassy_executor::task]
-pub async fn button_task(
+pub async fn button_task_matrix(
     row0: Output<'static>,
     row1: Output<'static>,
     col0: Input<'static>,
     col1: Input<'static>,
     col2: Input<'static>,
 ) {
-    info!("Button task started");
+    info!("Button task (matrix) started");
 
     let mut matrix = ButtonMatrix::new(
         row0,
@@ -176,6 +176,57 @@ pub async fn button_task(
         }
 
         // Wait for next scan
+        Timer::after(scan_interval).await;
+    }
+}
+
+// ===================================================================
+// Direct Button Task Implementation
+// ===================================================================
+
+#[embassy_executor::task]
+pub async fn button_task_direct(
+    inputs: heapless::Vec<Input<'static>, 32>,
+) {
+    info!("Button task (direct) started");
+
+    let mut debouncer = ButtonDebouncer::new();
+    let mut _last_button_state = ButtonState {
+        buttons: [false; 32],
+        changed: false,
+        active_count: inputs.len(),
+    };
+
+    let scan_interval = Duration::from_millis(1000 / BUTTON_SCAN_RATE_HZ);
+    let sender = BUTTON_CHANNEL.sender();
+
+    loop {
+        // Read all inputs directly (active-low with pull-ups)
+        let mut raw_states = [false; 32];
+        for (i, pin) in inputs.iter().enumerate() {
+            raw_states[i] = !pin.is_high();
+        }
+
+        // Debounce and check for changes
+        let mut changed = false;
+        let active_keys = inputs.len();
+        let mut new_state = ButtonState::new(active_keys);
+
+        for i in 0..active_keys {
+            if debouncer.update(i, raw_states[i]) {
+                changed = true;
+                let pressed = debouncer.get_state(i);
+                debug!("Button {} {}", i, if pressed { "pressed" } else { "released" });
+            }
+            new_state.set_button(i, debouncer.get_state(i));
+        }
+
+        if changed {
+            new_state.changed = true;
+            sender.send(new_state).await;
+            _last_button_state = new_state;
+        }
+
         Timer::after(scan_interval).await;
     }
 }

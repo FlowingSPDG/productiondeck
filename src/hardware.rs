@@ -9,12 +9,14 @@ use embassy_rp::{peripherals, Peripherals};
 use embassy_rp::usb::Driver;
 use defmt::*;
 use heapless::Vec;
+use embassy_sync::channel::Channel;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 
 use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::usb::usb_task_for_device;
-use crate::buttons::button_task;
+use crate::buttons::{button_task_matrix, button_task_direct};
 
 /// Hardware configuration for a specific StreamDeck device
 pub struct HardwareConfig {
@@ -106,6 +108,49 @@ pub async fn init_hardware_tasks_for_device(
     init_hardware_tasks_with_config(spawner, p, &hw_config).await
 }
 
+/// Initialize and spawn core 0 tasks (USB, buttons) for multicore setup
+pub async fn init_hardware_tasks_core0(
+    spawner: &Spawner,
+    device: Device,
+) -> Result<(), SpawnError> {
+    let p = embassy_rp::init(Default::default());
+    let hw_config = HardwareConfig::for_device(device);
+    
+    info!("Core 0: Initializing hardware for {}", hw_config.device.device_name());
+    
+    // Create all pins and return them with the USB driver
+    let (driver, usb_led, status_led, error_led, row_pins, col_pins) = 
+        create_all_pins_for_device(p, hw_config.device);
+    
+    // Spawn USB task
+    spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
+    
+    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
+    if matches!(device, crate::device::Device::Mini | crate::device::Device::RevisedMini) {
+        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
+    }
+
+    // Spawn button task with device-specific layout
+    spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
+    
+    // Spawn status LED task
+    spawner.spawn(status_task(status_led, error_led))?;
+    
+    Ok(())
+}
+
+/// Initialize and spawn core 1 tasks (display, image processing) for multicore setup
+pub async fn init_hardware_tasks_core1(
+    device: Device,
+) -> Result<(), SpawnError> {
+    info!("Core 1: Initializing image processing tasks for {}", device.device_name());
+    
+    // TODO: Initialize display hardware and spawn display task
+    // For now, just return success as display is not yet implemented
+    
+    Ok(())
+}
+
 /// Initialize and spawn all hardware tasks with given configuration
 async fn init_hardware_tasks_with_config(
     spawner: &Spawner,
@@ -124,8 +169,14 @@ async fn init_hardware_tasks_with_config(
     // Spawn USB task
     spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
     
+    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
+    let device = hw_config.device;
+    if matches!(device, crate::device::Device::Mini | crate::device::Device::RevisedMini) {
+        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
+    }
+
     // Spawn button task with device-specific layout
-    spawn_button_task_with_pins(spawner, row_pins, col_pins, hw_config.device)?;
+    spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
     
     // Spawn display task (commented out until hardware is ready)
     // spawn_display_task(spawner, p, &hw_config)?;
@@ -146,7 +197,7 @@ fn create_all_pins_for_device(
     Output<'static>, 
     Output<'static>,
     Vec<Output<'static>, 4>, 
-    Vec<Input<'static>, 8>
+    Vec<Input<'static>, 32>
 ) {
     
     // Create USB driver and LEDs first
@@ -158,25 +209,38 @@ fn create_all_pins_for_device(
     // Create button pins
     let layout = device.button_layout();
     let mut row_pins: Vec<Output<'static>, 4> = Vec::new();
-    let mut col_pins: Vec<Input<'static>, 8> = Vec::new();
-    
-    match (layout.rows, layout.cols) {
-        (2, 3) => {
-            // Mini and Revised Mini (2x3 = 6 keys)
-            let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-            let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-            let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-        }
-        _ => {
-            // For now, all other devices use the same pin layout as Mini
-            warn!("Using Mini button layout for {} - implement device-specific layout", device.device_name());
-            let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-            let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-            let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+    let mut col_pins: Vec<Input<'static>, 32> = Vec::new();
+
+    // If Direct mode is selected for Mini, build 6 direct input pins
+    if matches!(crate::config::button_input_mode(), crate::config::ButtonInputMode::Direct)
+        && matches!(device, Device::Mini | Device::RevisedMini)
+    {
+        // Build six dedicated direct-input pins for Mini to avoid partial-move issues
+        let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
+    } else {
+        match (layout.rows, layout.cols) {
+            (2, 3) => {
+                // Mini and Revised Mini (2x3 = 6 keys)
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+            }
+            _ => {
+                // For now, all other devices use the same pin layout as Mini
+                warn!("Using Mini button layout for {} - implement device-specific layout", device.device_name());
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+            }
         }
     }
     
@@ -187,18 +251,47 @@ fn create_all_pins_for_device(
 fn spawn_button_task_with_pins(
     spawner: &Spawner,
     mut row_pins: Vec<Output<'static>, 4>,
-    mut col_pins: Vec<Input<'static>, 8>,
-    _device: Device,
+    mut col_pins: Vec<Input<'static>, 32>,
+    device: Device,
 ) -> Result<(), SpawnError> {
-    // For now, hardcode to Mini layout since button_task expects specific pins
-    // Extract the pins we need (this will panic if not enough pins, but that's a dev error)
-    let row0 = row_pins.pop().unwrap();
-    let row1 = row_pins.pop().unwrap();
-    let col0 = col_pins.pop().unwrap();
-    let col1 = col_pins.pop().unwrap(); 
-    let col2 = col_pins.pop().unwrap();
-    
-    spawner.spawn(button_task(row0, row1, col0, col1, col2))
+    match crate::config::button_input_mode() {
+        crate::config::ButtonInputMode::Matrix => {
+            // Extract pins for matrix task based on device layout
+            let layout = device.button_layout();
+            match (layout.rows, layout.cols) {
+                (2, 3) => {
+                    let row0 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                }
+                _ => {
+                    // Until wider matrix support lands, warn and use first 2x3
+                    warn!("Matrix mode not fully implemented for this device; using Mini layout subset");
+                    let row0 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                }
+            }
+        }
+        crate::config::ButtonInputMode::Direct => {
+            // Use as many input pins as available up to 32
+            let mut inputs: heapless::Vec<Input<'static>, 32> = heapless::Vec::new();
+            while let Some(pin) = col_pins.pop() {
+                let _ = inputs.push(pin);
+            }
+            // Ensure Mini has exactly 6 inputs if possible
+            if matches!(device, Device::Mini | Device::RevisedMini) && inputs.len() > 6 {
+                while inputs.len() > 6 { let _ = inputs.pop(); }
+            }
+            spawner.spawn(button_task_direct(inputs))
+        }
+    }
 }
 
 

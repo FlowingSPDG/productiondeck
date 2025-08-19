@@ -5,7 +5,7 @@
 use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
 use crate::device::ProtocolVersion;
 use crate::config::{
-    IMAGE_BUFFER_SIZE,
+    IMAGE_PROCESSING_BUFFER_SIZE,
     STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3,
     STREAMDECK_RESET_MAGIC, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
     FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1
@@ -15,7 +15,7 @@ use heapless::Vec;
 /// V1 Protocol Handler for BMP-based StreamDeck devices
 #[derive(Debug)]
 pub struct V1Handler {
-    image_buffer: Vec<u8, IMAGE_BUFFER_SIZE>,
+    image_buffer: Vec<u8, IMAGE_PROCESSING_BUFFER_SIZE>,
     receiving_image: bool,
     expected_key: u8,
 }
@@ -44,16 +44,19 @@ impl ProtocolHandlerTrait for V1Handler {
     
     fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
         if data.len() < 8 {
-            return ImageProcessResult::Error("Packet too small for V1 protocol");
+            // Swallow malformed packets to avoid host-side errors
+            return ImageProcessResult::Incomplete;
         }
         
-        // V1 Protocol format: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
-        if data[0] != 0x02 || data[1] != 0x01 {
-            return ImageProcessResult::Error("Invalid V1 packet header");
-        }
-        
-        let packet_num = data[2];
-        let key_id = data[5];
+        // V1 Protocol format primary: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
+        // Accept variant where report ID (0x02) is stripped by HID stack: [0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, data...]
+        let (packet_num, key_id, data_start) = if data[0] == 0x02 && data.len() >= 6 {
+            (data[2], data[5], 8)
+        } else if data[0] == 0x01 && data.len() >= 5 {
+            (data[1], data[4], 7)
+        } else {
+            return ImageProcessResult::Incomplete;
+        };
         
         // First packet starts image reception
         if packet_num == 0x01 {
@@ -62,22 +65,20 @@ impl ProtocolHandlerTrait for V1Handler {
             self.expected_key = key_id;
             
             // Skip header and copy image data
-            let data_start = 8;
             if data.len() > data_start {
                 if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
                     self.reset_image_state();
-                    return ImageProcessResult::Error("Image buffer overflow");
+                    return ImageProcessResult::Incomplete;
                 }
             }
             
             ImageProcessResult::Incomplete
         } else if packet_num == 0x02 && self.receiving_image && key_id == self.expected_key {
             // Second packet completes the image
-            let data_start = 8;
             if data.len() > data_start {
                 if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
                     self.reset_image_state();
-                    return ImageProcessResult::Error("Image buffer overflow");
+                    return ImageProcessResult::Incomplete;
                 }
             }
             
@@ -88,7 +89,8 @@ impl ProtocolHandlerTrait for V1Handler {
             
             ImageProcessResult::Complete(complete_image)
         } else {
-            ImageProcessResult::Error("Invalid V1 packet sequence")
+            // Ignore unexpected sequences for now
+            ImageProcessResult::Incomplete
         }
     }
     
@@ -127,11 +129,11 @@ impl ProtocolHandlerTrait for V1Handler {
             0x09, 0x01, // Usage (Consumer Control)
             0x05, 0x09, // Usage Page (Button)
             0x19, 0x01, // Usage Minimum (0x01)
-            0x29, 0x10, // Usage Maximum (0x10)
+            0x29, 0x06, // Usage Maximum (0x06) - Mini has 6 buttons
             0x15, 0x00, // Logical Minimum (0)
             0x26, 0xff, 0x00, // Logical Maximum (255)
             0x75, 0x08, // Report Size (8)
-            0x95, 0x10, // Report Count (16)
+            0x95, 0x06, // Report Count (6) - Mini buttons
             0x85, 0x01, // Report ID (0x01)
             0x81, 0x02, // Input (Data,Var,Abs)
             0x0a, 0x00, 0xff, // Usage (Button 255)
@@ -202,8 +204,8 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn input_report_size(&self, button_count: usize) -> usize {
-        // V1 input reports: Report ID (1 byte) + button states
-        (button_count + 15) / 16 * 16 // Round up to 16-byte boundary
+        // V1 input reports: Report ID (1 byte) + button states (no padding)
+        1 + button_count
     }
     
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
@@ -215,6 +217,8 @@ impl ProtocolHandlerTrait for V1Handler {
         report[0] = 0x01; // Report ID
         
         let button_bytes = (buttons.active_count).min(report.len() - 1);
+
+        // Write actual keys only; no padding beyond active_count
         for i in 0..button_bytes {
             report[i + 1] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
@@ -224,7 +228,7 @@ impl ProtocolHandlerTrait for V1Handler {
             report[i] = 0;
         }
         
-        report.len()
+        1 + button_bytes
     }
     
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
