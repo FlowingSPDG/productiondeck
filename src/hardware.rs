@@ -124,8 +124,14 @@ async fn init_hardware_tasks_with_config(
     // Spawn USB task
     spawner.spawn(usb_task_for_device(driver, usb_led, hw_config.device))?;
     
+    // For Mini devices, prefer Direct pin mode with 6 dedicated inputs
+    let device = hw_config.device;
+    if matches!(device, crate::device::Device::Mini | crate::device::Device::RevisedMini) {
+        crate::config::set_button_input_mode(crate::config::ButtonInputMode::Direct);
+    }
+
     // Spawn button task with device-specific layout
-    spawn_button_task_with_pins(spawner, row_pins, col_pins, hw_config.device)?;
+    spawn_button_task_with_pins(spawner, row_pins, col_pins, device)?;
     
     // Spawn display task (commented out until hardware is ready)
     // spawn_display_task(spawner, p, &hw_config)?;
@@ -159,24 +165,37 @@ fn create_all_pins_for_device(
     let layout = device.button_layout();
     let mut row_pins: Vec<Output<'static>, 4> = Vec::new();
     let mut col_pins: Vec<Input<'static>, 32> = Vec::new();
-    
-    match (layout.rows, layout.cols) {
-        (2, 3) => {
-            // Mini and Revised Mini (2x3 = 6 keys)
-            let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-            let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-            let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
-        }
-        _ => {
-            // For now, all other devices use the same pin layout as Mini
-            warn!("Using Mini button layout for {} - implement device-specific layout", device.device_name());
-            let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
-            let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
-            let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
-            let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+
+    // If Direct mode is selected for Mini, build 6 direct input pins
+    if matches!(crate::config::button_input_mode(), crate::config::ButtonInputMode::Direct)
+        && matches!(device, Device::Mini | Device::RevisedMini)
+    {
+        // Build six dedicated direct-input pins for Mini to avoid partial-move issues
+        let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+        let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
+    } else {
+        match (layout.rows, layout.cols) {
+            (2, 3) => {
+                // Mini and Revised Mini (2x3 = 6 keys)
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+            }
+            _ => {
+                // For now, all other devices use the same pin layout as Mini
+                warn!("Using Mini button layout for {} - implement device-specific layout", device.device_name());
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+            }
         }
     }
     
@@ -220,6 +239,10 @@ fn spawn_button_task_with_pins(
             let mut inputs: heapless::Vec<Input<'static>, 32> = heapless::Vec::new();
             while let Some(pin) = col_pins.pop() {
                 let _ = inputs.push(pin);
+            }
+            // Ensure Mini has exactly 6 inputs if possible
+            if matches!(device, Device::Mini | Device::RevisedMini) && inputs.len() > 6 {
+                while inputs.len() > 6 { let _ = inputs.pop(); }
             }
             spawner.spawn(button_task_direct(inputs))
         }

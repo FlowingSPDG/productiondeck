@@ -160,6 +160,18 @@ pub fn btn_col_pins() -> &'static [u8] {
     }
 }
 
+/// Direct input pin assignments (one GPIO per button)
+/// For Mini (6 keys), use six dedicated pins.
+pub fn btn_direct_pins() -> &'static [u8] {
+    let keys = streamdeck_keys();
+    match keys {
+        // StreamDeck Mini and Revised Mini (6 keys)
+        6 => &[4, 5, 6, 10, 11, 12],
+        // Fallback: re-use column pins (may not cover all keys)
+        _ => btn_col_pins(),
+    }
+}
+
 // SPI Display Interface
 pub const SPI_MOSI_PIN: u8 = 19; // Data to display
 pub const SPI_SCK_PIN: u8 = 18; // Clock to display
