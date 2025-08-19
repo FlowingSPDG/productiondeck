@@ -198,7 +198,7 @@ impl ProtocolHandlerTrait for V2Handler {
             report[i] = 0;
         }
         
-        report.len()
+        3 + button_bytes
     }
     
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {

@@ -127,11 +127,11 @@ impl ProtocolHandlerTrait for V1Handler {
             0x09, 0x01, // Usage (Consumer Control)
             0x05, 0x09, // Usage Page (Button)
             0x19, 0x01, // Usage Minimum (0x01)
-            0x29, 0x10, // Usage Maximum (0x10)
+            0x29, 0x06, // Usage Maximum (0x06) - Mini has 6 buttons
             0x15, 0x00, // Logical Minimum (0)
             0x26, 0xff, 0x00, // Logical Maximum (255)
             0x75, 0x08, // Report Size (8)
-            0x95, 0x10, // Report Count (16)
+            0x95, 0x06, // Report Count (6) - Mini buttons
             0x85, 0x01, // Report ID (0x01)
             0x81, 0x02, // Input (Data,Var,Abs)
             0x0a, 0x00, 0xff, // Usage (Button 255)
@@ -202,8 +202,8 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn input_report_size(&self, button_count: usize) -> usize {
-        // V1 input reports: Report ID (1 byte) + button states
-        (button_count + 15) / 16 * 16 // Round up to 16-byte boundary
+        // V1 input reports: Report ID (1 byte) + button states (no padding)
+        1 + button_count
     }
     
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
@@ -215,6 +215,8 @@ impl ProtocolHandlerTrait for V1Handler {
         report[0] = 0x01; // Report ID
         
         let button_bytes = (buttons.active_count).min(report.len() - 1);
+
+        // Write actual keys only; no padding beyond active_count
         for i in 0..button_bytes {
             report[i + 1] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
@@ -224,7 +226,7 @@ impl ProtocolHandlerTrait for V1Handler {
             report[i] = 0;
         }
         
-        report.len()
+        1 + button_bytes
     }
     
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
