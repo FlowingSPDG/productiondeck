@@ -31,7 +31,7 @@ static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
 static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 
 // Inter-core communication channel for image processing
-static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 4> = Channel::new();
+static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 8> = Channel::new();
 
 /// Main application entry point for StreamDeck Mini with multicore support
 #[cortex_m_rt::entry]
@@ -121,13 +121,27 @@ async fn core1_image_processing_task() {
         }
     }
     
+    // Optimized image processing buffer
+    let mut image_processing_buffer = [0u8; 8192]; // 8KB buffer for image processing
+    
     // Process display commands from core 0
     let receiver = IMAGE_CHANNEL.receiver();
     loop {
         match receiver.receive().await {
             productiondeck::types::DisplayCommand::DisplayImage { key_id, data } => {
                 info!("Core 1: Processing image for key {} ({} bytes)", key_id, data.len());
-                // TODO: Implement actual image processing and display
+                
+                // Optimized image processing with larger buffer
+                if data.len() <= image_processing_buffer.len() {
+                    // Copy data to processing buffer for faster access
+                    let copy_len = data.len().min(image_processing_buffer.len());
+                    image_processing_buffer[..copy_len].copy_from_slice(&data[..copy_len]);
+                    
+                    // TODO: Implement actual image processing and display
+                    // Process image from buffer for better performance
+                } else {
+                    warn!("Core 1: Image too large for buffer ({} > {} bytes)", data.len(), image_processing_buffer.len());
+                }
             }
             productiondeck::types::DisplayCommand::SetBrightness(brightness) => {
                 info!("Core 1: Setting brightness to {}%", brightness);

@@ -5,7 +5,7 @@
 use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
 use crate::device::ProtocolVersion;
 use crate::config::{
-    IMAGE_BUFFER_SIZE,
+    IMAGE_PROCESSING_BUFFER_SIZE,
     STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3,
     STREAMDECK_RESET_MAGIC, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
     FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1
@@ -15,7 +15,7 @@ use heapless::Vec;
 /// V1 Protocol Handler for BMP-based StreamDeck devices
 #[derive(Debug)]
 pub struct V1Handler {
-    image_buffer: Vec<u8, IMAGE_BUFFER_SIZE>,
+    image_buffer: Vec<u8, IMAGE_PROCESSING_BUFFER_SIZE>,
     receiving_image: bool,
     expected_key: u8,
 }

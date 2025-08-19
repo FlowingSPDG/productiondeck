@@ -5,7 +5,7 @@
 use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
 use crate::device::ProtocolVersion;
 use crate::config::{
-    IMAGE_BUFFER_SIZE,
+    IMAGE_PROCESSING_BUFFER_SIZE,
     OUTPUT_REPORT_IMAGE, IMAGE_COMMAND_V2,
     V2_COMMAND_RESET, V2_COMMAND_BRIGHTNESS
 };
@@ -14,7 +14,7 @@ use heapless::Vec;
 /// V2 Protocol Handler for JPEG-based StreamDeck devices
 #[derive(Debug)]
 pub struct V2Handler {
-    image_buffer: Vec<u8, IMAGE_BUFFER_SIZE>,
+    image_buffer: Vec<u8, IMAGE_PROCESSING_BUFFER_SIZE>,
     receiving_image: bool,
     expected_key: u8,
     expected_sequence: u16,

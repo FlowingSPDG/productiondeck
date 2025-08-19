@@ -298,7 +298,7 @@ async fn usb_task_impl(
     
     static mut HID_STATE: State = State::new();
     #[allow(static_mut_refs)]
-    let hid = unsafe { HidReaderWriter::<_, 64, 1024>::new(&mut builder, &mut HID_STATE, hid_config) };
+    let hid = unsafe { HidReaderWriter::<_, 64, 4096>::new(&mut builder, &mut HID_STATE, hid_config) };
 
     // Build USB device
     let mut usb = builder.build();
@@ -340,7 +340,7 @@ async fn usb_task_impl(
 
         // OUT image reader protocol state
         let mut out_protocol = ProtocolHandler::create(device.usb_config().protocol);
-        let mut out_buf = [0u8; 1024];
+        let mut out_buf = [0u8; 4096];
 
         // Button sender loop
         let button_loop = async {
