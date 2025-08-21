@@ -8,7 +8,7 @@ use crate::config::{
     IMAGE_PROCESSING_BUFFER_SIZE,
     STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3,
     STREAMDECK_RESET_MAGIC, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
-    FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1
+    FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1, FEATURE_REPORT_IDLE_TIME
 };
 use heapless::Vec;
 
@@ -235,14 +235,6 @@ impl ProtocolHandlerTrait for V1Handler {
     
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
         match report_id {
-            FEATURE_REPORT_RESET_V1 => {
-                // V1 Reset: [0x0B, 0x63, ...]
-                if data.len() >= 2 && data[1] == STREAMDECK_RESET_MAGIC {
-                    Some(ProtocolCommand::Reset)
-                } else {
-                    None
-                }
-            }
             FEATURE_REPORT_BRIGHTNESS_V1 => {
                 // V1 Brightness/Reset: [0x05, 0x55, 0xAA, 0xD1, 0x01, value, ...]
                 if data.len() >= 6 
@@ -260,11 +252,15 @@ impl ProtocolHandlerTrait for V1Handler {
                     None
                 }
             }
-            // Idle time setter (Module-compatible): Report 0x0B with command 0xA2 and INT32 seconds
-            crate::config::FEATURE_REPORT_IDLE_TIME => {
+            // Handle both V1 Reset and Module Idle Time (both use report 0x0B)
+            FEATURE_REPORT_RESET_V1 | FEATURE_REPORT_IDLE_TIME => {
                 if data.len() >= 6 && data[1] == crate::config::IDLE_TIME_COMMAND {
+                    // Module Idle Time: [0x0B, 0xA2, seconds_le...]
                     let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
                     Some(ProtocolCommand::SetIdleTime(secs))
+                } else if data.len() >= 2 && data[1] == STREAMDECK_RESET_MAGIC {
+                    // V1 Reset: [0x0B, 0x63, ...]
+                    Some(ProtocolCommand::Reset)
                 } else {
                     None
                 }
