@@ -121,7 +121,9 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn hid_descriptor(&self) -> &'static [u8] {
-        // V1 StreamDeck HID descriptor (from existing implementation)
+        // V1 StreamDeck HID descriptor (generic V1 implementation)
+        // NOTE: Do not force the exact Mini (173-byte) descriptor here.
+        // This generic descriptor suits V1 devices we target now.
         &[
             0x05, 0x0c, // Usage Page (Consumer)
             0x09, 0x01, // Usage (Consumer Control)
@@ -204,7 +206,7 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn input_report_size(&self, button_count: usize) -> usize {
-        // V1 input reports: Report ID (1 byte) + button states (no padding)
+        // V1 input reports: Report ID (1 byte) + button states (RP2040 USB hardware limitation)
         1 + button_count
     }
     
@@ -216,9 +218,9 @@ impl ProtocolHandlerTrait for V1Handler {
         // V1 format: [0x01, button_states...]
         report[0] = 0x01; // Report ID
         
-        let button_bytes = (buttons.active_count).min(report.len() - 1);
-
-        // Write actual keys only; no padding beyond active_count
+        let button_bytes = buttons.active_count.min(report.len() - 1);
+        
+        // Write actual button states
         for i in 0..button_bytes {
             report[i + 1] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
@@ -254,6 +256,15 @@ impl ProtocolHandlerTrait for V1Handler {
                     } else {
                         Some(ProtocolCommand::SetBrightness(data[5]))
                     }
+                } else {
+                    None
+                }
+            }
+            // Idle time setter (Module-compatible): Report 0x0B with command 0xA2 and INT32 seconds
+            crate::config::FEATURE_REPORT_IDLE_TIME => {
+                if data.len() >= 6 && data[1] == crate::config::IDLE_TIME_COMMAND {
+                    let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
+                    Some(ProtocolCommand::SetIdleTime(secs))
                 } else {
                     None
                 }

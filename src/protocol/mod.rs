@@ -57,6 +57,8 @@ pub enum ProtocolCommand {
     Reset,
     SetBrightness(u8),
     ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
+    /// Set idle time before entering Sleep Mode (seconds). 0 disables sleep.
+    SetIdleTime(i32),
 }
 
 /// Enum-based protocol handler for no_std environment

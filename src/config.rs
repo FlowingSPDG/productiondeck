@@ -2,7 +2,7 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig};
-use core::sync::atomic::{AtomicU16, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU16, AtomicU8, AtomicI32, Ordering};
 
 // ===================================================================
 // Device Selection Configuration
@@ -218,6 +218,23 @@ pub const DISPLAY_BUFFER_SIZE: usize = 2048; // 2KB for display operations
 pub const MULTICORE_CHANNEL_SIZE: usize = 8; // Increased channel size for better throughput
 
 // ===================================================================
+// Power Management: Idle Time (Sleep Mode)
+// ===================================================================
+
+/// Idle time before entering Sleep Mode, in seconds. 0 disables sleep.
+static IDLE_TIME_SECONDS: AtomicI32 = AtomicI32::new(0);
+
+/// Set idle time before entering Sleep Mode (seconds). Use 0 to disable sleep.
+pub fn set_idle_time_seconds(seconds: i32) {
+    IDLE_TIME_SECONDS.store(seconds, Ordering::Relaxed);
+}
+
+/// Get idle time before entering Sleep Mode (seconds). 0 means disabled.
+pub fn get_idle_time_seconds() -> i32 {
+    IDLE_TIME_SECONDS.load(Ordering::Relaxed)
+}
+
+// ===================================================================
 // USB HID Report IDs and Commands
 // ===================================================================
 
@@ -237,6 +254,11 @@ pub const FEATURE_REPORT_V2_COMMANDS: u8 = 0x03; // V2 command container
 // V2 sub-commands (used with FEATURE_REPORT_V2_COMMANDS)
 pub const V2_COMMAND_RESET: u8 = 0x02;
 pub const V2_COMMAND_BRIGHTNESS: u8 = 0x08;
+
+// Idle time feature report constants
+pub const FEATURE_REPORT_IDLE_TIME: u8 = 0x0B;
+pub const IDLE_TIME_COMMAND: u8 = 0xA2;
+pub const FEATURE_REPORT_GET_IDLE_TIME: u8 = 0xA3;
 
 // StreamDeck protocol magic bytes
 pub const STREAMDECK_MAGIC_1: u8 = 0x55;
