@@ -8,7 +8,7 @@ use crate::config::{
     IMAGE_PROCESSING_BUFFER_SIZE,
     STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3,
     STREAMDECK_RESET_MAGIC, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
-    FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1
+    FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1, FEATURE_REPORT_IDLE_TIME
 };
 use heapless::Vec;
 
@@ -121,7 +121,9 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn hid_descriptor(&self) -> &'static [u8] {
-        // V1 StreamDeck HID descriptor (from existing implementation)
+        // V1 StreamDeck HID descriptor (generic V1 implementation)
+        // NOTE: Do not force the exact Mini (173-byte) descriptor here.
+        // This generic descriptor suits V1 devices we target now.
         &[
             0x05, 0x0c, // Usage Page (Consumer)
             0x09, 0x01, // Usage (Consumer Control)
@@ -204,7 +206,7 @@ impl ProtocolHandlerTrait for V1Handler {
     }
     
     fn input_report_size(&self, button_count: usize) -> usize {
-        // V1 input reports: Report ID (1 byte) + button states (no padding)
+        // V1 input reports: Report ID (1 byte) + button states (RP2040 USB hardware limitation)
         1 + button_count
     }
     
@@ -216,9 +218,9 @@ impl ProtocolHandlerTrait for V1Handler {
         // V1 format: [0x01, button_states...]
         report[0] = 0x01; // Report ID
         
-        let button_bytes = (buttons.active_count).min(report.len() - 1);
-
-        // Write actual keys only; no padding beyond active_count
+        let button_bytes = buttons.active_count.min(report.len() - 1);
+        
+        // Write actual button states
         for i in 0..button_bytes {
             report[i + 1] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
@@ -233,14 +235,6 @@ impl ProtocolHandlerTrait for V1Handler {
     
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
         match report_id {
-            FEATURE_REPORT_RESET_V1 => {
-                // V1 Reset: [0x0B, 0x63, ...]
-                if data.len() >= 2 && data[1] == STREAMDECK_RESET_MAGIC {
-                    Some(ProtocolCommand::Reset)
-                } else {
-                    None
-                }
-            }
             FEATURE_REPORT_BRIGHTNESS_V1 => {
                 // V1 Brightness/Reset: [0x05, 0x55, 0xAA, 0xD1, 0x01, value, ...]
                 if data.len() >= 6 
@@ -254,6 +248,19 @@ impl ProtocolHandlerTrait for V1Handler {
                     } else {
                         Some(ProtocolCommand::SetBrightness(data[5]))
                     }
+                } else {
+                    None
+                }
+            }
+            // Handle both V1 Reset and Module Idle Time (both use report 0x0B)
+            FEATURE_REPORT_RESET_V1 | FEATURE_REPORT_IDLE_TIME => {
+                if data.len() >= 6 && data[1] == crate::config::IDLE_TIME_COMMAND {
+                    // Module Idle Time: [0x0B, 0xA2, seconds_le...]
+                    let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
+                    Some(ProtocolCommand::SetIdleTime(secs))
+                } else if data.len() >= 2 && data[1] == STREAMDECK_RESET_MAGIC {
+                    // V1 Reset: [0x0B, 0x63, ...]
+                    Some(ProtocolCommand::Reset)
                 } else {
                     None
                 }
