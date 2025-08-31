@@ -4,7 +4,7 @@
 //! - Fixed 65-byte Input Reports
 //! - Fixed 1024-byte Output Reports  
 //! - Fixed 32-byte Feature Reports
-//! - 90° clockwise image rotation
+//! - 180° image rotation (for 15/32 Keys) or 90° rotation (for 6 Keys)
 //! - Chunked image upload
 
 use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
@@ -20,6 +20,16 @@ pub struct ModuleHandler {
     expected_key: u8,
     expected_chunk: u8,
     total_chunks: u8,
+    rotation_type: ModuleRotationType,
+}
+
+/// Rotation type for different Module devices
+#[derive(Debug, Clone, Copy)]
+pub enum ModuleRotationType {
+    /// 90° clockwise rotation (Module 6 Keys)
+    Rotate90,
+    /// 180° rotation (Module 15/32 Keys)
+    Rotate180,
 }
 
 impl ModuleHandler {
@@ -30,6 +40,19 @@ impl ModuleHandler {
             expected_key: 0,
             expected_chunk: 0,
             total_chunks: 0,
+            rotation_type: ModuleRotationType::Rotate90, // Default for Module 6 Keys
+        }
+    }
+    
+    /// Create Module handler with specific rotation type
+    pub fn new_with_rotation(rotation_type: ModuleRotationType) -> Self {
+        Self {
+            image_buffer: Vec::new(),
+            receiving_image: false,
+            expected_key: 0,
+            expected_chunk: 0,
+            total_chunks: 0,
+            rotation_type,
         }
     }
     

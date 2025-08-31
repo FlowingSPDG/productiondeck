@@ -9,7 +9,7 @@ pub mod module;
 use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
 use crate::device::ProtocolVersion;
-use crate::protocol::module::ModuleHandler;
+use crate::protocol::module::{ModuleHandler, ModuleRotationType};
 
 /// Protocol-specific image processing result
 #[derive(Debug)]
@@ -79,6 +79,11 @@ impl ProtocolHandler {
             ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new()),
             ProtocolVersion::Module => ProtocolHandler::Module(ModuleHandler::new()),
         }
+    }
+    
+    /// Create Module protocol handler with specific rotation type
+    pub fn create_module_with_rotation(rotation_type: ModuleRotationType) -> Self {
+        ProtocolHandler::Module(ModuleHandler::new_with_rotation(rotation_type))
     }
     
     /// Get protocol version

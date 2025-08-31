@@ -30,6 +30,8 @@ Build device-specific firmware using: `cargo run --bin <device-name>`
 | **StreamDeck XL** | 32 (8x4) | 96x96px | V2 JPEG | `xl` | ✅ Alpha |
 | **StreamDeck Plus** | 8 (4x2) | 120x120px | V2 JPEG | `plus` | ✅ Alpha |
 | **Stream Deck Module 6 Keys** | 6 (3x2) | 80x80px | Module BMP | `module6` | ✅ Alpha |
+| **Stream Deck Module 15 Keys** | 15 (5x3) | 72x72px | Module BMP | `module15` | ✅ Alpha |
+| **Stream Deck Module 32 Keys** | 32 (8x4) | 96x96px | Module BMP | `module32` | ✅ Alpha |
 | **StreamDeck Pedal** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Studio** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Mobile** | N/A | N/A | N/A | Not Planned |

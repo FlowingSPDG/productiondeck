@@ -150,6 +150,8 @@ pub enum Device {
     Xl,
     Plus,
     Module6,
+    Module15,
+    Module32,
 }
 
 impl Device {
@@ -163,13 +165,15 @@ impl Device {
             0x006c => Some(Device::Xl),
             0x0084 => Some(Device::Plus),
             0x00b8 => Some(Device::Module6), // Stream Deck Module 6 Keys
+            0x00b9 => Some(Device::Module15), // Stream Deck Module 15 Keys
+            0x00ba => Some(Device::Module32), // Stream Deck Module 32 Keys
             _ => None,
         }
     }
     
     /// Get all supported device PIDs
     pub fn supported_pids() -> &'static [u16] {
-        &[0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084, 0x00b8]
+        &[0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084, 0x00b8, 0x00b9, 0x00ba]
     }
     
     /// Get PID for this device
@@ -182,6 +186,8 @@ impl Device {
             Device::Xl => 0x006c,
             Device::Plus => 0x0084,
             Device::Module6 => 0x00b8,
+            Device::Module15 => 0x00b9,
+            Device::Module32 => 0x00ba,
         }
     }
 }
@@ -196,6 +202,8 @@ impl DeviceConfig for Device {
             Device::Xl => "StreamDeck XL",
             Device::Plus => "StreamDeck Plus",
             Device::Module6 => "Stream Deck Module 6 Keys",
+            Device::Module15 => "Stream Deck Module 15 Keys",
+            Device::Module32 => "Stream Deck Module 32 Keys",
         }
     }
     
@@ -207,6 +215,8 @@ impl DeviceConfig for Device {
             Device::Xl => ButtonLayout::new(8, 4, true),
             Device::Plus => ButtonLayout::new(4, 2, true),
             Device::Module6 => ButtonLayout::new(3, 2, true), // 3x2 layout, left-to-right
+            Device::Module15 => ButtonLayout::new(5, 3, true), // 5x3 layout, left-to-right
+            Device::Module32 => ButtonLayout::new(8, 4, true), // 8x4 layout, left-to-right
         }
     }
     
@@ -257,6 +267,22 @@ impl DeviceConfig for Device {
                 image_height: 80,
                 format: ImageFormat::Bmp,
                 needs_rotation: true, // 90° clockwise rotation
+                flip_horizontal: false,
+                flip_vertical: false,
+            },
+            Device::Module15 => DisplayConfig {
+                image_width: 72,
+                image_height: 72,
+                format: ImageFormat::Bmp,
+                needs_rotation: true, // 180° rotation for Module 15
+                flip_horizontal: false,
+                flip_vertical: false,
+            },
+            Device::Module32 => DisplayConfig {
+                image_width: 96,
+                image_height: 96,
+                format: ImageFormat::Bmp,
+                needs_rotation: true, // 180° rotation for Module 32
                 flip_horizontal: false,
                 flip_vertical: false,
             },
@@ -311,6 +337,20 @@ impl DeviceConfig for Device {
                 vid: 0x0fd9,
                 pid: 0x00b8,
                 product_name: "Stream Deck Module 6 Keys",
+                manufacturer: "Elgato Systems",
+                protocol: ProtocolVersion::Module,
+            },
+            Device::Module15 => UsbConfig {
+                vid: 0x0fd9,
+                pid: 0x00b9,
+                product_name: "Stream Deck Module 15 Keys",
+                manufacturer: "Elgato Systems",
+                protocol: ProtocolVersion::Module,
+            },
+            Device::Module32 => UsbConfig {
+                vid: 0x0fd9,
+                pid: 0x00ba,
+                product_name: "Stream Deck Module 32 Keys",
                 manufacturer: "Elgato Systems",
                 protocol: ProtocolVersion::Module,
             },
