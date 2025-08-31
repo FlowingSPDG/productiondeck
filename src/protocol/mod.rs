@@ -4,10 +4,12 @@
 
 pub mod v1;
 pub mod v2;
+pub mod module;
 
 use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
 use crate::device::ProtocolVersion;
+use crate::protocol::module::ModuleHandler;
 
 /// Protocol-specific image processing result
 #[derive(Debug)]
@@ -66,6 +68,7 @@ pub enum ProtocolCommand {
 pub enum ProtocolHandler {
     V1(v1::V1Handler),
     V2(v2::V2Handler),
+    Module(ModuleHandler),
 }
 
 impl ProtocolHandler {
@@ -74,6 +77,7 @@ impl ProtocolHandler {
         match version {
             ProtocolVersion::V1 => ProtocolHandler::V1(v1::V1Handler::new()),
             ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new()),
+            ProtocolVersion::Module => ProtocolHandler::Module(ModuleHandler::new()),
         }
     }
     
@@ -82,6 +86,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(_) => ProtocolVersion::V1,
             ProtocolHandler::V2(_) => ProtocolVersion::V2,
+            ProtocolHandler::Module(_) => ProtocolVersion::Module,
         }
     }
     
@@ -90,6 +95,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.process_image_packet(data),
             ProtocolHandler::V2(handler) => handler.process_image_packet(data),
+            ProtocolHandler::Module(handler) => handler.process_image_packet(data),
         }
     }
     
@@ -98,6 +104,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
             ProtocolHandler::V2(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
+            ProtocolHandler::Module(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
         }
     }
     
@@ -106,6 +113,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.hid_descriptor(),
             ProtocolHandler::V2(handler) => handler.hid_descriptor(),
+            ProtocolHandler::Module(handler) => handler.hid_descriptor(),
         }
     }
     
@@ -114,6 +122,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.input_report_size(button_count),
             ProtocolHandler::V2(handler) => handler.input_report_size(button_count),
+            ProtocolHandler::Module(handler) => handler.input_report_size(button_count),
         }
     }
     
@@ -122,6 +131,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::V2(handler) => handler.format_button_report(buttons, report),
+            ProtocolHandler::Module(handler) => handler.format_button_report(buttons, report),
         }
     }
     
@@ -130,6 +140,7 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::V2(handler) => handler.handle_feature_report(report_id, data),
+            ProtocolHandler::Module(handler) => handler.handle_feature_report(report_id, data),
         }
     }
 }

@@ -26,6 +26,8 @@ pub enum ProtocolVersion {
     V1,
     /// V2 protocol (Original V2, XL, MK2, Plus)
     V2,
+    /// Module protocol (Stream Deck Module 6, 15, 32 Keys)
+    Module,
 }
 
 /// Button layout configuration
@@ -123,6 +125,7 @@ pub trait DeviceConfig {
         match self.usb_config().protocol {
             ProtocolVersion::V1 => self.button_layout().total_keys + 1, // +1 for report ID
             ProtocolVersion::V2 => self.button_layout().total_keys + 4, // +4 for V2 header
+            ProtocolVersion::Module => 65, // Fixed 65-byte input reports for Module
         }
     }
     
@@ -146,6 +149,7 @@ pub enum Device {
     OriginalV2,
     Xl,
     Plus,
+    Module6,
 }
 
 impl Device {
@@ -158,13 +162,14 @@ impl Device {
             0x006d => Some(Device::OriginalV2),
             0x006c => Some(Device::Xl),
             0x0084 => Some(Device::Plus),
+            0x00b8 => Some(Device::Module6), // Stream Deck Module 6 Keys
             _ => None,
         }
     }
     
     /// Get all supported device PIDs
     pub fn supported_pids() -> &'static [u16] {
-        &[0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084]
+        &[0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084, 0x00b8]
     }
     
     /// Get PID for this device
@@ -176,6 +181,7 @@ impl Device {
             Device::OriginalV2 => 0x006d,
             Device::Xl => 0x006c,
             Device::Plus => 0x0084,
+            Device::Module6 => 0x00b8,
         }
     }
 }
@@ -189,6 +195,7 @@ impl DeviceConfig for Device {
             Device::OriginalV2 => "StreamDeck Original V2",
             Device::Xl => "StreamDeck XL",
             Device::Plus => "StreamDeck Plus",
+            Device::Module6 => "Stream Deck Module 6 Keys",
         }
     }
     
@@ -199,6 +206,7 @@ impl DeviceConfig for Device {
             Device::OriginalV2 => ButtonLayout::new(5, 3, true),
             Device::Xl => ButtonLayout::new(8, 4, true),
             Device::Plus => ButtonLayout::new(4, 2, true),
+            Device::Module6 => ButtonLayout::new(3, 2, true), // 3x2 layout, left-to-right
         }
     }
     
@@ -241,6 +249,14 @@ impl DeviceConfig for Device {
                 image_height: 120,
                 format: ImageFormat::Jpeg,
                 needs_rotation: false,
+                flip_horizontal: false,
+                flip_vertical: false,
+            },
+            Device::Module6 => DisplayConfig {
+                image_width: 80,
+                image_height: 80,
+                format: ImageFormat::Bmp,
+                needs_rotation: true, // 90° clockwise rotation
                 flip_horizontal: false,
                 flip_vertical: false,
             },
@@ -290,6 +306,13 @@ impl DeviceConfig for Device {
                 product_name: "Stream Deck Plus",
                 manufacturer: "Elgato Systems",
                 protocol: ProtocolVersion::V2,
+            },
+            Device::Module6 => UsbConfig {
+                vid: 0x0fd9,
+                pid: 0x00b8,
+                product_name: "Stream Deck Module 6 Keys",
+                manufacturer: "Elgato Systems",
+                protocol: ProtocolVersion::Module,
             },
         }
     }
