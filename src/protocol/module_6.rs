@@ -176,6 +176,10 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         }
         None
     }
+
+    fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
+        self.get_feature_report_bytes(report_id, buf)
+    }
 }
 
 impl Module6KeysHandler {
@@ -187,15 +191,17 @@ impl Module6KeysHandler {
                 ModuleGetCommand::GetFirmwareVersion(ftype) => {
                     let ver = self.get_firmware_version(ftype);
                     buf[0] = report_id;
+                    // bytes 1..4 are N/A (0), version ASCII at offset 5
                     let start = 5; let end = (start + ver.len()).min(total_len);
-                    buf[start..end].copy_from_slice(&ver[..(end - start)]);
+                    // bytes 1..4 already zeroed above
+                    if end > start { buf[start..end].copy_from_slice(&ver[..(end - start)]); }
                     return Some(total_len);
                 }
                 ModuleGetCommand::GetUnitSerialNumber => {
                     let serial = self.get_unit_serial_number();
                     buf[0] = 0x03;
                     let start = 5; let end = (start + serial.len()).min(total_len);
-                    buf[start..end].copy_from_slice(&serial[..(end - start)]);
+                    if end > start { buf[start..end].copy_from_slice(&serial[..(end - start)]); }
                     return Some(total_len);
                 }
                 ModuleGetCommand::GetIdleTime => {
