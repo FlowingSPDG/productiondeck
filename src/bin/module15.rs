@@ -69,16 +69,16 @@ fn main() -> ! {
         )));
         // Spawn button task for Module 15 (matrix 5x3 = 15 buttons)
         unwrap!(spawner.spawn(buttons::button_task_matrix_5x3(
-            // rows: 3 outputs
+            // rows: 3 outputs (per hardware config: 2, 3, 7)
             embassy_rp::gpio::Output::new(p.PIN_2, embassy_rp::gpio::Level::High),
             embassy_rp::gpio::Output::new(p.PIN_3, embassy_rp::gpio::Level::High),
-            embassy_rp::gpio::Output::new(p.PIN_4, embassy_rp::gpio::Level::High),
-            // cols: 5 inputs with pull-ups
+            embassy_rp::gpio::Output::new(p.PIN_7, embassy_rp::gpio::Level::High),
+            // cols: 5 inputs with pull-ups (per hardware config: 4, 5, 6, 10, 11)
+            embassy_rp::gpio::Input::new(p.PIN_4, embassy_rp::gpio::Pull::Up),
             embassy_rp::gpio::Input::new(p.PIN_5, embassy_rp::gpio::Pull::Up),
             embassy_rp::gpio::Input::new(p.PIN_6, embassy_rp::gpio::Pull::Up),
-            embassy_rp::gpio::Input::new(p.PIN_7, embassy_rp::gpio::Pull::Up),
-            embassy_rp::gpio::Input::new(p.PIN_8, embassy_rp::gpio::Pull::Up),
-            embassy_rp::gpio::Input::new(p.PIN_9, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_10, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_11, embassy_rp::gpio::Pull::Up),
         )));
         // Spawn status LED task
         unwrap!(spawner.spawn(hardware::status_task(
