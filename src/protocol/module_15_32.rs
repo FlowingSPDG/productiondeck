@@ -66,6 +66,12 @@ impl Module15_32KeysHandler {
     }
 }
 
+impl Default for Module15_32KeysHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProtocolHandlerTrait for Module15_32KeysHandler {
     fn version(&self) -> ProtocolVersion {
         ProtocolVersion::Module15_32Keys
@@ -88,7 +94,6 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
             ModuleModel::Module32 => 32,
         };
         let mut mapped = [false; 32];
-        let mut count = 0usize;
         for y in 0..rows {
             for x in 0..cols {
                 let src_index = if left_to_right {
@@ -99,15 +104,12 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                 let dst_index = y * cols + x;
                 if src_index < physical_buttons.len() && dst_index < max {
                     mapped[dst_index] = physical_buttons[src_index];
-                    if mapped[dst_index] {
-                        count += 1;
-                    }
                 }
             }
         }
         ButtonMapping {
             mapped_buttons: mapped,
-            active_count: count,
+            active_count: max,
         }
     }
 
@@ -162,9 +164,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
         let total_len = 32.min(buf.len());
-        for i in 0..total_len {
-            buf[i] = 0x00;
-        }
+        buf.iter_mut().take(total_len).for_each(|b| *b = 0);
         if let Some(cmd) = self.parse_module_get_command(report_id) {
             match cmd {
                 ModuleGetCommand::GetFirmwareVersion(ftype) => {
@@ -195,7 +195,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                 ModuleGetCommand::GetIdleTime => {
                     buf[0] = 0x0A;
                     buf[1] = 0x04; // data length
-                    let secs = crate::config::get_idle_time_seconds() as i32;
+                    let secs = crate::config::get_idle_time_seconds();
                     let le = secs.to_le_bytes();
                     buf[2] = le[0];
                     buf[3] = le[1];

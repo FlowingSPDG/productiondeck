@@ -1,3 +1,4 @@
+#![allow(unreachable_code)]
 //! ProductionDeck - StreamDeck Mini Compatible Firmware
 //!
 //! This binary builds firmware specifically for StreamDeck Mini compatibility:

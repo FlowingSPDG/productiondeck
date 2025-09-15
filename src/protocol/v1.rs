@@ -4,9 +4,9 @@
 
 use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
 use crate::config::{
-    FEATURE_REPORT_BRIGHTNESS_V1, FEATURE_REPORT_IDLE_TIME, FEATURE_REPORT_RESET_V1,
-    IMAGE_PROCESSING_BUFFER_SIZE, STREAMDECK_BRIGHTNESS_RESET_MAGIC, STREAMDECK_MAGIC_1,
-    STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
+    FEATURE_REPORT_BRIGHTNESS_V1, IMAGE_PROCESSING_BUFFER_SIZE,
+    STREAMDECK_BRIGHTNESS_RESET_MAGIC, STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2,
+    STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
 };
 use crate::device::ProtocolVersion;
 use crate::protocol::module::ModuleSetCommand;
@@ -34,6 +34,12 @@ impl V1Handler {
         self.image_buffer.clear();
         self.receiving_image = false;
         self.expected_key = 0;
+    }
+}
+
+impl Default for V1Handler {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -65,29 +71,27 @@ impl ProtocolHandlerTrait for V1Handler {
             self.expected_key = key_id;
 
             // Skip header and copy image data
-            if data.len() > data_start {
-                if self
+            if data.len() > data_start
+                && self
                     .image_buffer
                     .extend_from_slice(&data[data_start..])
                     .is_err()
-                {
-                    self.reset_image_state();
-                    return ImageProcessResult::Incomplete;
-                }
+            {
+                self.reset_image_state();
+                return ImageProcessResult::Incomplete;
             }
 
             ImageProcessResult::Incomplete
         } else if packet_num == 0x02 && self.receiving_image && key_id == self.expected_key {
             // Second packet completes the image
-            if data.len() > data_start {
-                if self
+            if data.len() > data_start
+                && self
                     .image_buffer
                     .extend_from_slice(&data[data_start..])
                     .is_err()
-                {
-                    self.reset_image_state();
-                    return ImageProcessResult::Incomplete;
-                }
+            {
+                self.reset_image_state();
+                return ImageProcessResult::Incomplete;
             }
 
             // V1 image is complete
@@ -240,8 +244,8 @@ impl ProtocolHandlerTrait for V1Handler {
         }
 
         // Fill remaining bytes with 0
-        for i in (button_bytes + 1)..report.len() {
-            report[i] = 0;
+        for b in report.iter_mut().skip(button_bytes + 1) {
+            *b = 0;
         }
 
         1 + button_bytes
@@ -267,7 +271,7 @@ impl ProtocolHandlerTrait for V1Handler {
                 }
             }
             // Handle both V1 Reset and Module Idle Time (both use report 0x0B)
-            FEATURE_REPORT_RESET_V1 | FEATURE_REPORT_IDLE_TIME => {
+            0x0B => {
                 if data.len() >= 6 && data[1] == crate::config::IDLE_TIME_COMMAND {
                     // Module Idle Time: [0x0B, 0xA2, seconds_le...]
                     let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
@@ -285,11 +289,9 @@ impl ProtocolHandlerTrait for V1Handler {
 
     fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
         match report_id {
-            0xA0 | 0xA1 | 0xA2 => {
+            0xA0..=0xA2 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -303,9 +305,7 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x03 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -319,9 +319,7 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x04 => {
                 let total_len = 17.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 let version = b"3.00.000";
                 let start = 5;
@@ -331,9 +329,7 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x05 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -347,12 +343,10 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             crate::config::FEATURE_REPORT_GET_IDLE_TIME => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 buf[1] = 0x06;
-                let seconds = crate::config::get_idle_time_seconds() as i32;
+                let seconds = crate::config::get_idle_time_seconds();
                 let secs_le = seconds.to_le_bytes();
                 buf[2] = secs_le[0];
                 buf[3] = secs_le[1];
@@ -362,9 +356,7 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x07 => {
                 let total_len = 16.min(buf.len());
-                for i in 0..total_len {
-                    buf[i] = 0x00;
-                }
+                buf.iter_mut().take(total_len).for_each(|b| *b = 0);
                 buf[0] = report_id;
                 Some(total_len)
             }

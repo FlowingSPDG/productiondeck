@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 //! Button matrix scanning implementation
 //!
 //! This module handles the 3x2 button matrix scanning with debouncing
@@ -121,8 +122,8 @@ async fn run_matrix_task<const ROWS: usize, const COLS: usize>(
         let mut changed = false;
         let mut new_state = ButtonState::new(active_keys);
 
-        for i in 0..active_keys {
-            if debouncer.update(i, raw_states[i]) {
+        for (i, state) in raw_states.iter().copied().enumerate().take(active_keys) {
+            if debouncer.update(i, state) {
                 changed = true;
                 let pressed = debouncer.get_state(i);
                 debug!(
@@ -164,6 +165,7 @@ pub async fn button_task_matrix_3x2(
 }
 
 #[embassy_executor::task]
+#[allow(clippy::too_many_arguments)]
 pub async fn button_task_matrix_5x3(
     row0: Output<'static>,
     row1: Output<'static>,
@@ -180,6 +182,7 @@ pub async fn button_task_matrix_5x3(
 }
 
 #[embassy_executor::task]
+#[allow(clippy::too_many_arguments)]
 pub async fn button_task_matrix_8x4(
     row0: Output<'static>,
     row1: Output<'static>,
@@ -232,8 +235,8 @@ pub async fn button_task_direct(inputs: heapless::Vec<Input<'static>, 32>) {
         let active_keys = inputs.len();
         let mut new_state = ButtonState::new(active_keys);
 
-        for i in 0..active_keys {
-            if debouncer.update(i, raw_states[i]) {
+        for (i, state) in raw_states.iter().copied().enumerate().take(active_keys) {
+            if debouncer.update(i, state) {
                 changed = true;
                 let pressed = debouncer.get_state(i);
                 debug!(

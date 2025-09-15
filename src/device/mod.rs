@@ -325,7 +325,7 @@ impl DeviceConfig for Device {
             },
             Device::Plus => UsbConfig {
                 vid: 0x0fd9,
-                pid: 0x0080,
+                pid: 0x0084,
                 product_name: "Stream Deck Plus",
                 manufacturer: "Elgato Systems",
                 protocol: ProtocolVersion::V2,

@@ -1,3 +1,4 @@
+#![allow(unreachable_code)]
 //! ProductionDeck - Stream Deck Module 32 Compatible Firmware
 //!
 //! This binary builds firmware specifically for Stream Deck Module 32 compatibility:

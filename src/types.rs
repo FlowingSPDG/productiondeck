@@ -48,6 +48,7 @@ impl ButtonState {
 
 /// USB commands that can be sent from the HID handler to other tasks
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum UsbCommand {
     /// Reset device to initial state
     Reset,
@@ -56,12 +57,14 @@ pub enum UsbCommand {
     /// Image data received for a specific key
     ImageData {
         key_id: u8,
+        #[allow(clippy::large_enum_variant)]
         data: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
 }
 
 /// Display commands for controlling the display subsystem
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum DisplayCommand {
     /// Clear a specific key display
     Clear(u8),
@@ -72,6 +75,7 @@ pub enum DisplayCommand {
     /// Display an image on a specific key
     DisplayImage {
         key_id: u8,
+        #[allow(clippy::large_enum_variant)]
         data: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
 }

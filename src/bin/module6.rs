@@ -1,3 +1,4 @@
+#![allow(unreachable_code)]
 //! ProductionDeck - Stream Deck Module 6 Compatible Firmware
 //!
 //! This binary builds firmware specifically for Stream Deck Module 6 compatibility:

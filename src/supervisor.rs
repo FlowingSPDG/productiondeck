@@ -108,3 +108,9 @@ impl AppSupervisor {
         self.uptime_seconds
     }
 }
+
+impl Default for AppSupervisor {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -15,6 +15,7 @@ use heapless::Vec;
 
 /// Protocol-specific image processing result
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ImageProcessResult {
     /// Image processing complete, ready to display
     Complete(Vec<u8, IMAGE_BUFFER_SIZE>),

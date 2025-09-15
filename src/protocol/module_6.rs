@@ -16,6 +16,12 @@ impl Module6KeysHandler {
         Self {}
     }
 }
+
+impl Default for Module6KeysHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl Module6KeysHandler {
     fn parse_module_set_command(&self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match report_id {
@@ -111,7 +117,6 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         left_to_right: bool,
     ) -> ButtonMapping {
         let mut mapped = [false; 32];
-        let mut count = 0usize;
 
         for y in 0..rows {
             for x in 0..cols {
@@ -123,16 +128,12 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
                 let dst_index = y * cols + x;
                 if src_index < physical_buttons.len() && dst_index < 32 {
                     mapped[dst_index] = physical_buttons[src_index];
-                    if mapped[dst_index] {
-                        count += 1;
-                    }
                 }
             }
         }
-
         ButtonMapping {
             mapped_buttons: mapped,
-            active_count: count,
+            active_count: 6,
         }
     }
 
@@ -211,9 +212,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
 impl Module6KeysHandler {
     pub fn get_feature_report_bytes(&self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
         let total_len = 32.min(buf.len());
-        for i in 0..total_len {
-            buf[i] = 0x00;
-        }
+        buf.iter_mut().take(total_len).for_each(|b| *b = 0);
         if let Some(cmd) = self.parse_module_get_command(report_id) {
             match cmd {
                 ModuleGetCommand::GetFirmwareVersion(ftype) => {
@@ -241,7 +240,7 @@ impl Module6KeysHandler {
                 ModuleGetCommand::GetIdleTime => {
                     buf[0] = 0xA3;
                     buf[1] = 0x06;
-                    let secs = crate::config::get_idle_time_seconds() as i32;
+                    let secs = crate::config::get_idle_time_seconds();
                     let le = secs.to_le_bytes();
                     buf[2] = le[0];
                     buf[3] = le[1];
