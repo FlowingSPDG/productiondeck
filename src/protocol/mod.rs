@@ -11,7 +11,7 @@ pub mod module_15_32;
 use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
 use crate::device::ProtocolVersion;
-use crate::protocol::module::FirmwareType;
+use crate::protocol::module::ModuleSetCommand;
 
 /// Protocol-specific image processing result
 #[derive(Debug)]
@@ -52,30 +52,13 @@ pub trait ProtocolHandlerTrait {
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize;
     
     /// Process feature report commands
-    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand>;
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand>;
 
     /// Build feature GET report. Default is unhandled.
     fn get_feature_report(&mut self, _report_id: u8, _buf: &mut [u8]) -> Option<usize> { None }
 }
 
-/// Commands that can be generated from protocol processing
-#[derive(Debug, Clone)]
-pub enum ProtocolCommand {
-    Reset,
-    ShowLogo,
-    UpdateToMemoryBank{}, // TODO: Implement
-    UpdateBootLogo{slice_index: u8},
-    FillLCDWithColor{r: u8, g: u8, b: u8},
-    FillKeyWithColor{key_id: u8, r: u8, g: u8, b: u8},
-    SetBrightness(u8),
-    SetIdleTime(i32),
-    GetFirmwareVersion(FirmwareType),
-    GetUnitSerialNumber,
-    GetIdleTime,
-    GetUnitInformation{rows: u8, cols: u8, key_width: u16, key_height: u16, image_bpp: u8, image_color_scheme: u8, number_of_key_images_in_image_buffer: u8, number_of_frames_for_demo: u8},
-    SetKeyColor { key_index: u8, r: u8, g: u8, b: u8 },
-    ShowBackgroundByIndex { index: u8 },
-}
+// Legacy ProtocolCommand has been unified into ModuleSetCommand/ModuleGetCommand.
 
 /// Enum-based protocol handler for no_std environment
 #[derive(Debug)]
@@ -158,7 +141,7 @@ impl ProtocolHandler {
     }
     
     /// Process feature report commands
-    pub fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
+    pub fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match self {
             ProtocolHandler::V1(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::V2(handler) => handler.handle_feature_report(report_id, data),

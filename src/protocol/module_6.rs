@@ -6,7 +6,7 @@
 
 use crate::{protocol::module::{FirmwareType, ModuleSetCommand, ModuleGetCommand}};
 use crate::device::ProtocolVersion;
-use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
+use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping};
 
 
 #[derive(Debug)]
@@ -166,17 +166,9 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         needed
     }
 
-    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         if let Some(cmd) = self.parse_module_set_command(report_id, data) {
-            return match cmd {
-                ModuleSetCommand::ShowLogo => Some(ProtocolCommand::ShowLogo),
-                ModuleSetCommand::UpdateBootLogo { slice } => Some(ProtocolCommand::UpdateBootLogo { slice_index: slice }),
-                ModuleSetCommand::SetBrightness { value } => Some(ProtocolCommand::SetBrightness(value)),
-                ModuleSetCommand::SetIdleTime { seconds } => Some(ProtocolCommand::SetIdleTime(seconds)),
-                // Module 6 doesn't support these commands, but we handle them gracefully
-                ModuleSetCommand::SetKeyColor { key_index, r, g, b } => Some(ProtocolCommand::SetKeyColor { key_index, r, g, b }),
-                ModuleSetCommand::ShowBackgroundByIndex { index } => Some(ProtocolCommand::ShowBackgroundByIndex { index }),
-            }
+            return Some(cmd)
         }
         None
     }

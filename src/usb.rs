@@ -13,7 +13,8 @@ use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config};
 use crate::config;
 use crate::device::{Device, DeviceConfig};
-use crate::protocol::{ProtocolHandler, ProtocolCommand, ImageProcessResult};
+use crate::protocol::{ProtocolHandler, ImageProcessResult};
+use crate::protocol::module::ModuleSetCommand;
 use crate::channels::{BUTTON_CHANNEL, USB_COMMAND_CHANNEL, DISPLAY_CHANNEL};
 use crate::types::{UsbCommand, DisplayCommand};
 
@@ -85,17 +86,17 @@ impl RequestHandler for StreamDeckHidHandler {
             ReportId::Feature(report_id) => {
                 if let Some(command) = self.protocol_handler.handle_feature_report(report_id, data) {
                     match command {
-                        ProtocolCommand::Reset => {
+                        ModuleSetCommand::Reset => {
                             info!("Processing reset command");
                             let _ = self.usb_command_sender.try_send(UsbCommand::Reset);
                         }
-                        ProtocolCommand::SetBrightness(brightness) => {
-                            info!("Processing brightness command: {}%", brightness);
-                            let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
+                        ModuleSetCommand::SetBrightness { value } => {
+                            info!("Processing brightness command: {}%", value);
+                            let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(value));
                         }
-                        ProtocolCommand::SetIdleTime(secs) => {
-                            crate::config::set_idle_time_seconds(secs);
-                            info!("Set idle time to {} seconds", secs);
+                        ModuleSetCommand::SetIdleTime { seconds } => {
+                            crate::config::set_idle_time_seconds(seconds);
+                            info!("Set idle time to {} seconds", seconds);
                         }
                         _ => {}
                     }

@@ -5,7 +5,7 @@
 
 use crate::device::ProtocolVersion;
 use crate::protocol::module::{FirmwareType, ModuleGetCommand, ModuleSetCommand};
-use super::{ProtocolCommand, ProtocolHandlerTrait, ImageProcessResult, ButtonMapping};
+use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModuleModel {
@@ -24,39 +24,9 @@ impl Module15_32KeysHandler {
 
     fn parse_module_set_command(&self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match report_id {
-            // Feature report ID 0x03 with various commands
+            // Set Backlight Brightness (Feature report ID 0x03, Command 0x08)
             0x03 => {
-                if data.len() >= 2 {
-                    match data[1] {
-                        // Set Backlight Brightness (Command 0x08)
-                        0x08 => {
-                            if data.len() >= 3 { Some(ModuleSetCommand::SetBrightness { value: data[2] }) } else { None }
-                        }
-                        // Set Idle time before entering Sleep Mode (Command 0x0D)
-                        0x0D => {
-                            if data.len() >= 6 {
-                                let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
-                                Some(ModuleSetCommand::SetIdleTime { seconds: secs })
-                            } else { None }
-                        }
-                        // Set Key Color (Command 0x06)
-                        0x06 => {
-                            if data.len() >= 6 {
-                                Some(ModuleSetCommand::SetKeyColor { 
-                                    key_index: data[2], 
-                                    r: data[3], 
-                                    g: data[4], 
-                                    b: data[5] 
-                                })
-                            } else { None }
-                        }
-                        // Show Background by Index (Command 0x13)
-                        0x13 => {
-                            if data.len() >= 3 { Some(ModuleSetCommand::ShowBackgroundByIndex { index: data[2] }) } else { None }
-                        }
-                        _ => None,
-                    }
-                } else { None }
+                if data.len() >= 3 && data[1] == 0x08 { Some(ModuleSetCommand::SetBrightness { value: data[2] }) } else { None }
             }
             _ => None,
         }
@@ -69,7 +39,6 @@ impl Module15_32KeysHandler {
             0x07 => Some(ModuleGetCommand::GetFirmwareVersion(FirmwareType::AP1)),
             0x06 => Some(ModuleGetCommand::GetUnitSerialNumber),
             0x0A => Some(ModuleGetCommand::GetIdleTime),
-            0x08 => Some(ModuleGetCommand::GetUnitInformation),
             _ => None,
         }
     }
@@ -83,41 +52,6 @@ impl Module15_32KeysHandler {
     }
 
     fn get_unit_serial_number(&self) -> &'static [u8] { b"A1B2C3D4E5F6G7" }
-
-    fn get_unit_information(&self) -> [u8; 17] {
-        match self.model {
-            ModuleModel::Module15 => [
-                0x08, // Report ID
-                0x03, // Keypad Matrix rows
-                0x05, // Keypad Matrix columns
-                0x48, 0x00, // Key Width (72px)
-                0x48, 0x00, // Key Height (72px)
-                0xE0, 0x01, // LCD Width (480px)
-                0x10, 0x01, // LCD Height (272px)
-                0x18, // Image BPP (24)
-                0x00, // Image Color Scheme
-                0x00, // Number of key images in Gallery
-                0x00, // Number of LCD images in Gallery
-                0x00, // Number of frames for DEMO
-                0x00, // Reserved
-            ],
-            ModuleModel::Module32 => [
-                0x08, // Report ID
-                0x04, // Keypad Matrix rows
-                0x08, // Keypad Matrix columns
-                0x60, 0x00, // Key Width (96px)
-                0x60, 0x00, // Key Height (96px)
-                0x00, 0x04, // LCD Width (1024px)
-                0x58, 0x02, // LCD Height (600px)
-                0x18, // Image BPP (24)
-                0x00, // Image Color Scheme
-                0x00, // Number of key images in Gallery
-                0x00, // Number of LCD images in Gallery
-                0x00, // Number of frames for DEMO
-                0x00, // Reserved
-            ],
-        }
-    }
 }
 
 impl ProtocolHandlerTrait for Module15_32KeysHandler {
@@ -146,7 +80,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
-        // Input(0x01), Output(0x02), Feature IDs (0x03,0x04,0x05,0x06,0x07,0x08,0x0A)
+        // Input(0x01), Output(0x02), Feature IDs (0x03,0x04,0x05,0x06,0x07,0x0A)
         const DESC: &[u8] = &[
             0x05, 0x0C,
             0x09, 0x01,
@@ -172,7 +106,6 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
             0x85, 0x05, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x06, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x07, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
-            0x85, 0x08, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x0A, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0xC0,
         ];
@@ -197,16 +130,9 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
         needed
     }
 
-    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         if let Some(cmd) = self.parse_module_set_command(report_id, data) {
-            return match cmd {
-                ModuleSetCommand::ShowLogo => Some(ProtocolCommand::ShowLogo),
-                ModuleSetCommand::UpdateBootLogo { slice } => Some(ProtocolCommand::UpdateBootLogo { slice_index: slice }),
-                ModuleSetCommand::SetBrightness { value } => Some(ProtocolCommand::SetBrightness(value)),
-                ModuleSetCommand::SetIdleTime { seconds } => Some(ProtocolCommand::SetIdleTime(seconds)),
-                ModuleSetCommand::SetKeyColor { key_index, r, g, b } => Some(ProtocolCommand::SetKeyColor { key_index, r, g, b }),
-                ModuleSetCommand::ShowBackgroundByIndex { index } => Some(ProtocolCommand::ShowBackgroundByIndex { index }),
-            };
+            return Some(cmd);
         }
         None
     }
@@ -244,10 +170,8 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                     return Some(total_len);
                 }
                 ModuleGetCommand::GetUnitInformation => {
-                    let info = self.get_unit_information();
-                    let copy_len = core::cmp::min(info.len(), total_len);
-                    buf[..copy_len].copy_from_slice(&info[..copy_len]);
-                    return Some(total_len);
+                    // Module 15/32 specific unit info not implemented here
+                    return None;
                 }
             }
         }

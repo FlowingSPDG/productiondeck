@@ -2,7 +2,8 @@
 //! 
 //! Handles Original V2, XL, MK2, and Plus devices using JPEG format
 
-use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
+use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping};
+use crate::protocol::module::ModuleSetCommand;
 use crate::device::ProtocolVersion;
 use crate::config::{
     IMAGE_PROCESSING_BUFFER_SIZE,
@@ -203,18 +204,18 @@ impl ProtocolHandlerTrait for V2Handler {
         3 + button_bytes
     }
     
-    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand> {
+    fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         if report_id == 0x03 && data.len() >= 2 {
             // V2 commands: [0x03, command_byte, ...]
             match data[1] {
                 V2_COMMAND_RESET => {
                     // V2 Reset: [0x03, 0x02, ...]
-                    Some(ProtocolCommand::Reset)
+                    Some(ModuleSetCommand::Reset)
                 }
                 V2_COMMAND_BRIGHTNESS => {
                     // V2 Brightness: [0x03, 0x08, brightness, ...]
                     if data.len() >= 3 {
-                        Some(ProtocolCommand::SetBrightness(data[2]))
+                        Some(ModuleSetCommand::SetBrightness { value: data[2] })
                     } else {
                         None
                     }

@@ -7,6 +7,7 @@ pub enum FirmwareType {
 
 #[derive(Debug, Clone, Copy, PartialEq, defmt::Format)]
 pub enum ModuleSetCommand {
+    Reset,
     ShowLogo,                      
     UpdateBootLogo { slice: u8 },  
     SetBrightness { value: u8 },   
