@@ -2,7 +2,7 @@
 //!
 //! Handles Original V2, XL, MK2, and Plus devices using JPEG format
 
-use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
+use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
 use crate::config::{
     IMAGE_COMMAND_V2, IMAGE_PROCESSING_BUFFER_SIZE, OUTPUT_REPORT_IMAGE, V2_COMMAND_BRIGHTNESS,
     V2_COMMAND_RESET,
@@ -50,26 +50,33 @@ impl ProtocolHandlerTrait for V2Handler {
         ProtocolVersion::V2
     }
 
-    fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
         if data.len() < 8 {
-            // Swallow malformed packets to avoid host-side errors
-            return ImageProcessResult::Incomplete;
+            return OutputReportResult::Unhandled;
         }
 
-        // V2 Protocol format primary: [0x02, 0x07, key_id, is_last, len_lo, len_hi, seq_lo, seq_hi, data...]
+        // V2 Output Report: Command 0x07 (key), 0x08 (full LCD), 0x09 (boot logo)
+        // Key image format primary: [0x02, 0x07, key_id, is_last, len_lo, len_hi, seq_lo, seq_hi, data...]
         // Some HID stacks strip the report ID before delivering data to set_report. Accept both forms.
-        let (key_id, is_last, payload_len, sequence, data_start) =
-            if data[0] == OUTPUT_REPORT_IMAGE && data[1] == IMAGE_COMMAND_V2 {
+        let (cmd, key_id, is_last, payload_len, sequence, data_start) =
+            if data[0] == OUTPUT_REPORT_IMAGE {
+                let cmd = data[1];
+                if cmd == IMAGE_COMMAND_V2 {
                 (
+                    cmd,
                     data[2],
                     data[3] != 0,
                     u16::from_le_bytes([data[4], data[5]]),
                     u16::from_le_bytes([data[6], data[7]]),
                     8,
                 )
+                } else {
+                    (cmd, 0, false, 0, 0, 0)
+                }
             } else if data[0] == IMAGE_COMMAND_V2 && data.len() >= 7 {
-                // Missing report ID (0x02) case: [0x07, key_id, is_last, len_lo, len_hi, seq_lo, seq_hi, data...]
+                // Missing report ID (0x02) case for 0x07
                 (
+                    IMAGE_COMMAND_V2,
                     data[1],
                     data[2] != 0,
                     u16::from_le_bytes([data[3], data[4]]),
@@ -77,8 +84,17 @@ impl ProtocolHandlerTrait for V2Handler {
                     7,
                 )
             } else {
-                return ImageProcessResult::Incomplete;
+                return OutputReportResult::Unhandled;
             };
+
+        if cmd != IMAGE_COMMAND_V2 {
+            // For now, only branch key updates. Full screen / boot logo recognized but not assembled here.
+            return match cmd {
+                0x08 => OutputReportResult::FullScreenImageChunk,
+                0x09 => OutputReportResult::BootLogoImageChunk,
+                _ => OutputReportResult::Unhandled,
+            };
+        }
 
         // First packet (sequence 0) starts image reception
         if sequence == 0 {
@@ -95,7 +111,7 @@ impl ProtocolHandlerTrait for V2Handler {
         {
             // Reset and ignore to keep host happy
             self.reset_image_state();
-            return ImageProcessResult::Incomplete;
+            return OutputReportResult::Unhandled;
         }
 
         // Copy payload data
@@ -108,7 +124,7 @@ impl ProtocolHandlerTrait for V2Handler {
                 .is_err()
         {
             self.reset_image_state();
-            return ImageProcessResult::Incomplete;
+            return OutputReportResult::Unhandled;
         }
 
         self.expected_sequence += 1;
@@ -117,11 +133,12 @@ impl ProtocolHandlerTrait for V2Handler {
             // Image complete
             let mut complete_image = Vec::new();
             let _ = complete_image.extend_from_slice(&self.image_buffer);
+            let completed_key = self.expected_key;
             self.reset_image_state();
 
-            ImageProcessResult::Complete(complete_image)
+            OutputReportResult::KeyImageComplete { key_id: completed_key, image: complete_image }
         } else {
-            ImageProcessResult::Incomplete
+            OutputReportResult::Unhandled
         }
     }
 

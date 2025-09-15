@@ -3,9 +3,10 @@
 //! Unified handler for Module 15 and Module 32 per Elgato HID API.
 //! Reference: https://docs.elgato.com/streamdeck/hid/module-15_32
 
-use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
+use super::{ButtonMapping, ProtocolHandlerTrait};
 use crate::device::ProtocolVersion;
 use crate::protocol::module::{FirmwareType, ModuleGetCommand, ModuleSetCommand};
+use crate::protocol::OutputReportResult;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ModuleModel {
@@ -49,6 +50,7 @@ impl Module15_32KeysHandler {
             0x07 => Some(ModuleGetCommand::GetFirmwareVersion(FirmwareType::AP1)),
             0x06 => Some(ModuleGetCommand::GetUnitSerialNumber),
             0x0A => Some(ModuleGetCommand::GetIdleTime),
+            0x08 => Some(ModuleGetCommand::GetUnitInformation),
             _ => None,
         }
     }
@@ -77,10 +79,59 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
         ProtocolVersion::Module15_32Keys
     }
 
-    fn process_image_packet(&mut self, _data: &[u8]) -> ImageProcessResult {
-        // Image upload uses Output report ID 0x02 with Command 0x07 (key), 0x08 (full), 0x09 (boot)
-        ImageProcessResult::Incomplete
-    }
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult { 
+        let report_id = data[0];
+        let command = data[1];
+
+        match report_id {
+            0x02 => {
+                match command {
+                    0x07 => {
+                        // Update key Image
+                        let _key_index = data[2];
+                        let _transfer_done = data[3];
+                        let _chunk_content = u16::from_le_bytes([data[4], data[5]]);
+                        let _chunk_index = u16::from_le_bytes([data[6], data[7]]);
+                        let _chunk_data = &data[8..];
+
+                        return OutputReportResult::Unhandled;
+                    }
+                    0x08 => {
+                        // Update Full Screen Image
+                        let _key_index = data[2];
+                        let _transfer_done = data[3];
+                        let _chunk_content = u16::from_le_bytes([data[4], data[5]]);
+                        let _chunk_index = u16::from_le_bytes([data[6], data[7]]);
+                        let _chunk_data = &data[8..];
+
+                        return OutputReportResult::Unhandled;
+                    }
+                    0x09 => {
+                        // Update Boot Logo
+                        let _reserved = data[2];
+                        let _transfer_done = data[3];
+                        let _chunk_index = u16::from_le_bytes([data[4], data[5]]);
+                        let _chunk_contents_size = u16::from_le_bytes([data[6], data[7]]);
+                        let _chunk_data = &data[8..];
+
+                        return OutputReportResult::Unhandled;
+                    }
+                    0x0D => {
+                        // Update Background
+                        let _background_index = data[2];
+                        let _transfer_done = data[3];
+                        let _chunk_index = u16::from_le_bytes([data[4], data[5]]);
+                        let _chunk_contents_size = u16::from_le_bytes([data[6], data[7]]);
+                        let _chunk_data = &data[8..];
+
+                        return OutputReportResult::Unhandled;
+                    }
+                    _ => { return OutputReportResult::Unhandled; }
+                }
+            }
+            _ => { return OutputReportResult::Unhandled; }
+        }
+     }
 
     fn map_buttons(
         &self,
@@ -114,7 +165,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
-        // Input(0x01), Output(0x02), Feature IDs (0x03,0x04,0x05,0x06,0x07,0x0A)
+        // Input(0x01), Output(0x02), Feature IDs (0x03,0x04,0x05,0x06,0x07,0x08,0x0A)
         const DESC: &[u8] = &[
             0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x85, 0x01, 0x05, 0x09, 0x19, 0x01, 0x29, 0x20,
             0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x20, 0x81, 0x02, 0x85, 0x02, 0x0A,
@@ -124,8 +175,10 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
             0x95, 0x10, 0xB1, 0x04, 0x85, 0x05, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00,
             0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0x85, 0x06, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26,
             0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0x85, 0x07, 0x0A, 0x00, 0xFF, 0x15,
-            0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0x85, 0x0A, 0x0A, 0x00,
-            0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0xC0,
+            0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0x85, 0x08, 0x0A, 0x00,
+            0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04, 0x85, 0x0A,
+            0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
+            0xC0,
         ];
         DESC
     }
@@ -204,8 +257,45 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                     return Some(total_len);
                 }
                 ModuleGetCommand::GetUnitInformation => {
-                    // Module 15/32 specific unit info not implemented here
-                    return None;
+                    // Feature Report - Get Unit Information (Report ID 0x08)
+                    // Layout depends on model per docs.
+                    // Offsets:
+                    // [0]=ReportID(0x08)
+                    // [1]=rows, [2]=cols,
+                    // [3..4]=key width LE, [5..6]=key height LE,
+                    // [7..8]=LCD width LE, [9..10]=LCD height LE,
+                    // [11]=Image BPP, [12]=Color scheme,
+                    // [13]=#key images in gallery, [14]=#LCD images in gallery,
+                    // [15]=#frames for DEMO, [16]=Reserved
+
+                    let (rows, cols, key_w, key_h, lcd_w, lcd_h) = match self.model {
+                        ModuleModel::Module15 => (3u8, 5u8, 72u16, 72u16, 480u16, 272u16),
+                        ModuleModel::Module32 => (4u8, 8u8, 96u16, 96u16, 1024u16, 600u16),
+                    };
+
+                    buf[0] = 0x08;
+                    buf[1] = rows;
+                    buf[2] = cols;
+                    let kw = key_w.to_le_bytes();
+                    let kh = key_h.to_le_bytes();
+                    let lw = lcd_w.to_le_bytes();
+                    let lh = lcd_h.to_le_bytes();
+                    buf[3] = kw[0];
+                    buf[4] = kw[1];
+                    buf[5] = kh[0];
+                    buf[6] = kh[1];
+                    buf[7] = lw[0];
+                    buf[8] = lw[1];
+                    buf[9] = lh[0];
+                    buf[10] = lh[1];
+                    // JPEG images per docs; use 24bpp and RGB color scheme (0x00)
+                    buf[11] = 24; // Image BPP
+                    buf[12] = 0x00; // Image Color Scheme (assume RGB)
+                    buf[13] = 0x00; // Gallery counts unknown -> 0
+                    buf[14] = 0x00; // Gallery counts unknown -> 0
+                    buf[15] = 0x00; // DEMO frames
+                    buf[16] = 0x00; // Reserved
+                    return Some(total_len);
                 }
             }
         }

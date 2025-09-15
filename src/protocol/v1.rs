@@ -2,7 +2,7 @@
 //!
 //! Handles Original, Mini, and Revised Mini devices using BMP format
 
-use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
+use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
 use crate::config::{
     FEATURE_REPORT_BRIGHTNESS_V1, IMAGE_PROCESSING_BUFFER_SIZE,
     STREAMDECK_BRIGHTNESS_RESET_MAGIC, STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2,
@@ -48,10 +48,9 @@ impl ProtocolHandlerTrait for V1Handler {
         ProtocolVersion::V1
     }
 
-    fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
         if data.len() < 8 {
-            // Swallow malformed packets to avoid host-side errors
-            return ImageProcessResult::Incomplete;
+            return OutputReportResult::Unhandled;
         }
 
         // V1 Protocol format primary: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
@@ -61,7 +60,7 @@ impl ProtocolHandlerTrait for V1Handler {
         } else if data[0] == 0x01 && data.len() >= 5 {
             (data[1], data[4], 7)
         } else {
-            return ImageProcessResult::Incomplete;
+            return OutputReportResult::Unhandled;
         };
 
         // First packet starts image reception
@@ -78,10 +77,10 @@ impl ProtocolHandlerTrait for V1Handler {
                     .is_err()
             {
                 self.reset_image_state();
-                return ImageProcessResult::Incomplete;
+                return OutputReportResult::Unhandled;
             }
 
-            ImageProcessResult::Incomplete
+            OutputReportResult::Unhandled
         } else if packet_num == 0x02 && self.receiving_image && key_id == self.expected_key {
             // Second packet completes the image
             if data.len() > data_start
@@ -91,18 +90,19 @@ impl ProtocolHandlerTrait for V1Handler {
                     .is_err()
             {
                 self.reset_image_state();
-                return ImageProcessResult::Incomplete;
+                return OutputReportResult::Unhandled;
             }
 
             // V1 image is complete
             let mut complete_image = Vec::new();
             let _ = complete_image.extend_from_slice(&self.image_buffer);
+            let completed_key = self.expected_key;
             self.reset_image_state();
 
-            ImageProcessResult::Complete(complete_image)
+            OutputReportResult::KeyImageComplete { key_id: completed_key, image: complete_image }
         } else {
             // Ignore unexpected sequences for now
-            ImageProcessResult::Incomplete
+            OutputReportResult::Unhandled
         }
     }
 

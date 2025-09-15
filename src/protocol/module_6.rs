@@ -4,7 +4,7 @@
 //! Modules per public HID API docs. Image upload parsing is stubbed until we
 //! confirm exact chunk layout from PCAPs.
 
-use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
+use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
 use crate::device::ProtocolVersion;
 use crate::protocol::module::{FirmwareType, ModuleGetCommand, ModuleSetCommand};
 
@@ -26,26 +26,31 @@ impl Module6KeysHandler {
     fn parse_module_set_command(&self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match report_id {
             0x05 => {
-                if data.len() >= 6
-                    && data[1] == 0x55
-                    && data[2] == 0xAA
-                    && data[3] == 0xD1
-                    && data[4] == 0x01
+                // Payload excludes Report ID. Per spec:
+                // [Command=0x55, 0xAA, 0xD1, 0x01, Brightness]
+                if data.len() >= 5
+                    && data[0] == 0x55
+                    && data[1] == 0xAA
+                    && data[2] == 0xD1
+                    && data[3] == 0x01
                 {
-                    Some(ModuleSetCommand::SetBrightness { value: data[5] })
+                    Some(ModuleSetCommand::SetBrightness { value: data[4] })
                 } else {
                     None
                 }
             }
             0x0B => {
-                if data.len() >= 2 {
-                    match data[1] {
+                // Payload excludes Report ID.
+                // Commands at data[0]
+                if data.len() >= 1 {
+                    match data[0] {
                         0x63 => {
-                            if data.len() >= 3 {
-                                match data[2] {
+                            // data[1]: 0x00 Show Logo, 0x02 Update Boot Logo
+                            if data.len() >= 2 {
+                                match data[1] {
                                     0x00 => Some(ModuleSetCommand::ShowLogo),
                                     0x02 => {
-                                        let slice = if data.len() >= 4 { data[3] } else { 0 };
+                                        let slice = if data.len() >= 3 { data[2] } else { 0 };
                                         Some(ModuleSetCommand::UpdateBootLogo { slice })
                                     }
                                     _ => None,
@@ -55,8 +60,9 @@ impl Module6KeysHandler {
                             }
                         }
                         0xA2 => {
-                            if data.len() >= 6 {
-                                let secs = i32::from_le_bytes([data[2], data[3], data[4], data[5]]);
+                            // data[1..=4]: i32 seconds (LE)
+                            if data.len() >= 5 {
+                                let secs = i32::from_le_bytes([data[1], data[2], data[3], data[4]]);
                                 Some(ModuleSetCommand::SetIdleTime { seconds: secs })
                             } else {
                                 None
@@ -104,9 +110,28 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         ProtocolVersion::Module6Keys
     }
 
-    fn process_image_packet(&mut self, _data: &[u8]) -> ImageProcessResult {
-        // Stub: will be implemented precisely after PCAP confirmation
-        ImageProcessResult::Incomplete
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
+        let report_id = data[0];
+        let command = data[1];
+
+        match report_id {
+            // https://docs.elgato.com/streamdeck/hid/module-6#upload-data-to-image-memory-bank
+            0x02 => {
+                if command == 0x01 {
+                    let _chunk_index = data[2];
+                    let _reserved = data[3];
+                    let _show_image_flag = data[4];
+                    let _key_index = data[5];
+                    let _reserved = &data[6..0x10];
+                    let _chunk_data = &data[0x10..];
+
+                    OutputReportResult::Unhandled
+                } else {
+                    OutputReportResult::Unhandled
+                }
+            }
+            _ => OutputReportResult::Unhandled,
+        }
     }
 
     fn map_buttons(
@@ -239,7 +264,8 @@ impl Module6KeysHandler {
                 }
                 ModuleGetCommand::GetIdleTime => {
                     buf[0] = 0xA3;
-                    buf[1] = 0x06;
+                    // Data length for INT32 duration is 4 bytes
+                    buf[1] = 0x04;
                     let secs = crate::config::get_idle_time_seconds();
                     let le = secs.to_le_bytes();
                     buf[2] = le[0];
@@ -248,28 +274,7 @@ impl Module6KeysHandler {
                     buf[5] = le[3];
                     return Some(total_len);
                 }
-                // Module 6 doesn't support GetUnitInformation, but we handle it gracefully
-                ModuleGetCommand::GetUnitInformation => {
-                    // Return a default response for Module 6
-                    buf[0] = 0x08;
-                    buf[1] = 0x02; // rows
-                    buf[2] = 0x03; // columns
-                    buf[3] = 0x48;
-                    buf[4] = 0x00; // Key Width (72px)
-                    buf[5] = 0x48;
-                    buf[6] = 0x00; // Key Height (72px)
-                    buf[7] = 0xE0;
-                    buf[8] = 0x01; // LCD Width (480px)
-                    buf[9] = 0x10;
-                    buf[10] = 0x01; // LCD Height (272px)
-                    buf[11] = 0x18; // Image BPP (24)
-                    buf[12] = 0x00; // Image Color Scheme
-                    buf[13] = 0x00; // Number of key images in Gallery
-                    buf[14] = 0x00; // Number of LCD images in Gallery
-                    buf[15] = 0x00; // Number of frames for DEMO
-                    buf[16] = 0x00; // Reserved
-                    return Some(total_len);
-                }
+                _ => { return None; }
             }
         }
         None

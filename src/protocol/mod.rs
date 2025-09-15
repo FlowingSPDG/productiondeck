@@ -13,12 +13,26 @@ use crate::device::ProtocolVersion;
 use crate::protocol::module::ModuleSetCommand;
 use heapless::Vec;
 
+/// Parsed outcome of an Output Report (host -> device)
+#[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
+pub enum OutputReportResult {
+    /// Update Key Image (Module 15/32: cmd 0x07, Module 6: cmd 0x01 with ShowFlag=1)
+    KeyImageComplete { key_id: u8, image: Vec<u8, IMAGE_BUFFER_SIZE> },
+    /// Update Full Screen Image (Module 15/32: cmd 0x08)
+    FullScreenImageChunk,
+    /// Update Boot Logo (Module 15/32: cmd 0x09, Module 6 uses Feature combo)
+    BootLogoImageChunk,
+    /// Output report not recognized/unsupported for current device
+    Unhandled,
+}
+
 /// Protocol-specific image processing result
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum ImageProcessResult {
     /// Image processing complete, ready to display
-    Complete(Vec<u8, IMAGE_BUFFER_SIZE>),
+    Complete { key_id: u8, image: Vec<u8, IMAGE_BUFFER_SIZE> },
     /// More packets needed to complete image
     Incomplete,
     /// Error processing image
@@ -37,8 +51,8 @@ pub trait ProtocolHandlerTrait {
     /// Get protocol version
     fn version(&self) -> ProtocolVersion;
 
-    /// Process incoming image data packet
-    fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult;
+    /// Parse an Output Report (host -> device)
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult;
 
     /// Map physical button layout to protocol button order
     fn map_buttons(
@@ -103,13 +117,13 @@ impl ProtocolHandler {
         }
     }
 
-    /// Process incoming image data packet
-    pub fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
+    /// Parse Output Report (host -> device)
+    pub fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
         match self {
-            ProtocolHandler::V1(handler) => handler.process_image_packet(data),
-            ProtocolHandler::V2(handler) => handler.process_image_packet(data),
-            ProtocolHandler::Module6Keys(handler) => handler.process_image_packet(data),
-            ProtocolHandler::Module15_32Keys(handler) => handler.process_image_packet(data),
+            ProtocolHandler::V1(handler) => handler.parse_output_report(data),
+            ProtocolHandler::V2(handler) => handler.parse_output_report(data),
+            ProtocolHandler::Module6Keys(handler) => handler.parse_output_report(data),
+            ProtocolHandler::Module15_32Keys(handler) => handler.parse_output_report(data),
         }
     }
 

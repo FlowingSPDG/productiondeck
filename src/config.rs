@@ -210,7 +210,7 @@ pub fn display_total_height() -> usize {
 
 // USB Configuration
 pub const USB_POLL_RATE_MS: u64 = 1; // 1ms USB polling (1000Hz)
-pub const IMAGE_BUFFER_SIZE: usize = 4096; // 4KB buffer size (increased for better performance)
+pub const IMAGE_BUFFER_SIZE: usize = 1024; // 1KB buffer size
 
 // Image processing optimization
 pub const IMAGE_PROCESSING_BUFFER_SIZE: usize = 8192; // 8KB for image processing

@@ -7,7 +7,7 @@ use crate::channels::{BUTTON_CHANNEL, DISPLAY_CHANNEL, USB_COMMAND_CHANNEL};
 use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::protocol::module::ModuleSetCommand;
-use crate::protocol::{ImageProcessResult, ProtocolHandler};
+use crate::protocol::{OutputReportResult, ProtocolHandler};
 use crate::types::{DisplayCommand, UsbCommand};
 use defmt::*;
 use embassy_rp::gpio::Output;
@@ -132,26 +132,23 @@ impl StreamDeckHidHandler {
             );
         }
 
-        match self.protocol_handler.process_image_packet(data) {
-            ImageProcessResult::Complete(image_data) => {
-                // Extract key_id from the packet header
-                let key_id = if data.len() >= 3 { data[2] } else { 0 };
-
+        match self.protocol_handler.parse_output_report(data) {
+            OutputReportResult::KeyImageComplete { key_id, image } => {
                 info!(
                     "Image complete for key {} ({} bytes)",
                     key_id,
-                    image_data.len()
+                    image.len()
                 );
-                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData {
-                    key_id,
-                    data: image_data,
-                });
+                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { key_id, data: image });
             }
-            ImageProcessResult::Incomplete => {
-                debug!("Partial image data received");
+            OutputReportResult::FullScreenImageChunk => {
+                debug!("Full screen image chunk received (not assembled)");
             }
-            ImageProcessResult::Error(err) => {
-                error!("Image processing error: {}", err);
+            OutputReportResult::BootLogoImageChunk => {
+                debug!("Boot logo image chunk received (not assembled)");
+            }
+            OutputReportResult::Unhandled => {
+                debug!("Unhandled output report");
             }
         }
     }
@@ -333,34 +330,17 @@ async fn usb_task_impl(
                     Ok(n) => {
                         let data = &out_buf[..n];
                         if !data.is_empty() {
-                            match out_protocol.process_image_packet(data) {
-                                ImageProcessResult::Complete(image_data) => {
-                                    // Extract key id robustly: try V2 ([0x02,0x07,key,..]) or stripped ([0x07,key,..])
-                                    let key_guess = if data.len() >= 3 && data[0] == 0x02 {
-                                        data[2]
-                                    } else if data.len() >= 2 {
-                                        data[1]
-                                    } else {
-                                        0
-                                    };
-                                    let img_len = image_data.len();
+                            match out_protocol.parse_output_report(data) {
+                                OutputReportResult::KeyImageComplete { key_id, image } => {
+                                    let img_len = image.len();
                                     let _ = USB_COMMAND_CHANNEL.sender().try_send(
-                                        UsbCommand::ImageData {
-                                            key_id: key_guess,
-                                            data: image_data,
-                                        },
+                                        UsbCommand::ImageData { key_id, data: image },
                                     );
-                                    info!(
-                                        "Image complete for key {} ({} bytes)",
-                                        key_guess, img_len
-                                    );
+                                    info!("Image complete for key {} ({} bytes)", key_id, img_len);
                                 }
-                                ImageProcessResult::Incomplete => {
-                                    // Silent - most packets are incomplete until final one
-                                }
-                                ImageProcessResult::Error(_err) => {
-                                    // Should not occur with current tolerant parsers, but keep silent
-                                }
+                                OutputReportResult::FullScreenImageChunk => { }
+                                OutputReportResult::BootLogoImageChunk => { }
+                                OutputReportResult::Unhandled => { }
                             }
                         }
                     }
