@@ -1,14 +1,14 @@
 //! Button matrix scanning implementation
-//! 
+//!
 //! This module handles the 3x2 button matrix scanning with debouncing
 //! and sends button state changes to the USB task.
 
 use defmt::*;
 use embassy_rp::gpio::{Input, Output};
-use embassy_time::{Duration, Timer, Instant};
+use embassy_time::{Duration, Instant, Timer};
 
-use crate::config::*;
 use crate::channels::BUTTON_CHANNEL;
+use crate::config::*;
 use crate::types::ButtonState;
 
 // ===================================================================
@@ -70,7 +70,9 @@ struct ButtonMatrix<const ROWS: usize, const COLS: usize> {
 }
 
 impl<const ROWS: usize, const COLS: usize> ButtonMatrix<ROWS, COLS> {
-    fn new(rows: [Output<'static>; ROWS], cols: [Input<'static>; COLS]) -> Self { Self { rows, cols } }
+    fn new(rows: [Output<'static>; ROWS], cols: [Input<'static>; COLS]) -> Self {
+        Self { rows, cols }
+    }
 
     async fn scan(&mut self) -> [bool; 32] {
         let mut button_states = [false; 32]; // Max keys for any device
@@ -78,13 +80,13 @@ impl<const ROWS: usize, const COLS: usize> ButtonMatrix<ROWS, COLS> {
         for row_idx in 0..ROWS {
             // Pull current row low
             self.rows[row_idx].set_low();
-            
+
             // Small settling time
             Timer::after(Duration::from_micros(10)).await;
 
             for col_idx in 0..COLS {
                 let key_index = row_idx * COLS + col_idx;
-                
+
                 // Read column pin (low = button pressed due to pull-up)
                 button_states[key_index] = !self.cols[col_idx].is_high();
             }
@@ -97,7 +99,10 @@ impl<const ROWS: usize, const COLS: usize> ButtonMatrix<ROWS, COLS> {
     }
 }
 
-async fn run_matrix_task<const ROWS: usize, const COLS: usize>(mut matrix: ButtonMatrix<ROWS, COLS>, active_keys: usize) {
+async fn run_matrix_task<const ROWS: usize, const COLS: usize>(
+    mut matrix: ButtonMatrix<ROWS, COLS>,
+    active_keys: usize,
+) {
     let mut debouncer = ButtonDebouncer::new();
     let mut _last_button_state = ButtonState {
         buttons: [false; 32],
@@ -120,7 +125,11 @@ async fn run_matrix_task<const ROWS: usize, const COLS: usize>(mut matrix: Butto
             if debouncer.update(i, raw_states[i]) {
                 changed = true;
                 let pressed = debouncer.get_state(i);
-                debug!("Button {} {}", i, if pressed { "pressed" } else { "released" });
+                debug!(
+                    "Button {} {}",
+                    i,
+                    if pressed { "pressed" } else { "released" }
+                );
             }
             new_state.set_button(i, debouncer.get_state(i));
         }
@@ -186,7 +195,10 @@ pub async fn button_task_matrix_8x4(
     col7: Input<'static>,
 ) {
     info!("Button task (matrix 8x4) started");
-    let matrix = ButtonMatrix::<4, 8>::new([row0, row1, row2, row3], [col0, col1, col2, col3, col4, col5, col6, col7]);
+    let matrix = ButtonMatrix::<4, 8>::new(
+        [row0, row1, row2, row3],
+        [col0, col1, col2, col3, col4, col5, col6, col7],
+    );
     run_matrix_task::<4, 8>(matrix, 32).await;
 }
 
@@ -195,9 +207,7 @@ pub async fn button_task_matrix_8x4(
 // ===================================================================
 
 #[embassy_executor::task]
-pub async fn button_task_direct(
-    inputs: heapless::Vec<Input<'static>, 32>,
-) {
+pub async fn button_task_direct(inputs: heapless::Vec<Input<'static>, 32>) {
     info!("Button task (direct) started");
 
     let mut debouncer = ButtonDebouncer::new();
@@ -226,7 +236,11 @@ pub async fn button_task_direct(
             if debouncer.update(i, raw_states[i]) {
                 changed = true;
                 let pressed = debouncer.get_state(i);
-                debug!("Button {} {}", i, if pressed { "pressed" } else { "released" });
+                debug!(
+                    "Button {} {}",
+                    i,
+                    if pressed { "pressed" } else { "released" }
+                );
             }
             new_state.set_button(i, debouncer.get_state(i));
         }
@@ -240,4 +254,3 @@ pub async fn button_task_direct(
         Timer::after(scan_interval).await;
     }
 }
-

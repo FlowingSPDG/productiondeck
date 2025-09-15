@@ -1,5 +1,5 @@
 //! ProductionDeck - Stream Deck Module 6 Compatible Firmware
-//! 
+//!
 //! This binary builds firmware specifically for Stream Deck Module 6 compatibility:
 //! - 6 keys in 3x2 layout
 //! - 80x80 pixel images per key (rotate 90° clockwise per spec)
@@ -10,12 +10,12 @@
 #![no_main]
 
 use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Executor;
 use embassy_rp::multicore::{spawn_core1, Stack};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use panic_halt as _;
-use defmt_rtt as _;
 use static_cell::StaticCell;
 
 // Set compile-time device selection
@@ -31,20 +31,21 @@ static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
 static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 
 // Inter-core communication channel for image processing
-static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 8> = Channel::new();
+static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 8> =
+    Channel::new();
 
 /// Main application entry point for Stream Deck Module 6 with multicore support
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
-    
+
     // Create application supervisor for Module 6
     let supervisor = supervisor::AppSupervisor::new_for_device(DEVICE);
-    
+
     // Print startup information
     supervisor.print_startup_banner();
-    
+
     // Spawn core 1 for image processing and display tasks
     spawn_core1(
         p.CORE1,
@@ -56,7 +57,7 @@ fn main() -> ! {
             });
         },
     );
-    
+
     // Run core 0 for USB, buttons, and supervision
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| {
@@ -70,12 +71,30 @@ fn main() -> ! {
         // Spawn button task for Module 6 (Direct mode, 3x2 keys)
         unwrap!(spawner.spawn(buttons::button_task_direct({
             let mut inputs = heapless::Vec::new();
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_4, embassy_rp::gpio::Pull::Up));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_5, embassy_rp::gpio::Pull::Up));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_6, embassy_rp::gpio::Pull::Up));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_10, embassy_rp::gpio::Pull::Up));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_11, embassy_rp::gpio::Pull::Up));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(p.PIN_12, embassy_rp::gpio::Pull::Up));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_4,
+                embassy_rp::gpio::Pull::Up,
+            ));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_5,
+                embassy_rp::gpio::Pull::Up,
+            ));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_6,
+                embassy_rp::gpio::Pull::Up,
+            ));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_10,
+                embassy_rp::gpio::Pull::Up,
+            ));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_11,
+                embassy_rp::gpio::Pull::Up,
+            ));
+            let _ = inputs.push(embassy_rp::gpio::Input::new(
+                p.PIN_12,
+                embassy_rp::gpio::Pull::Up,
+            ));
             inputs
         })));
         // Spawn status LED task
@@ -84,7 +103,7 @@ fn main() -> ! {
             embassy_rp::gpio::Output::new(p.PIN_21, embassy_rp::gpio::Level::Low)
         )));
     });
-    
+
     // This should never be reached
     loop {
         cortex_m::asm::wfe();
@@ -95,12 +114,12 @@ fn main() -> ! {
 #[embassy_executor::task]
 async fn core0_main_task(mut supervisor: supervisor::AppSupervisor) {
     info!("Core 0: Starting USB and button tasks");
-    
+
     // Initialize and spawn core 0 tasks (USB, buttons)
     // Note: spawner is not available in this context, we'll use the existing channel system
     info!("Core 0: Stream Deck Module 6 firmware initialized successfully");
     supervisor.print_init_success();
-    
+
     // Run the main supervisor loop
     supervisor.run().await;
 }
@@ -109,7 +128,7 @@ async fn core0_main_task(mut supervisor: supervisor::AppSupervisor) {
 #[embassy_executor::task]
 async fn core1_image_processing_task() {
     info!("Core 1: Starting image processing and display tasks");
-    
+
     // Initialize and spawn core 1 tasks (display, image processing)
     match hardware::init_hardware_tasks_core1(DEVICE).await {
         Ok(()) => {
@@ -120,27 +139,35 @@ async fn core1_image_processing_task() {
             core::panic!("Image processing initialization failed");
         }
     }
-    
+
     // Optimized image processing buffer
     let mut image_processing_buffer = [0u8; 8192]; // 8KB buffer for image processing
-    
+
     // Process display commands from core 0
     let receiver = IMAGE_CHANNEL.receiver();
     loop {
         match receiver.receive().await {
             productiondeck::types::DisplayCommand::DisplayImage { key_id, data } => {
-                info!("Core 1: Processing image for key {} ({} bytes)", key_id, data.len());
-                
+                info!(
+                    "Core 1: Processing image for key {} ({} bytes)",
+                    key_id,
+                    data.len()
+                );
+
                 // Optimized image processing with larger buffer
                 if data.len() <= image_processing_buffer.len() {
                     // Copy data to processing buffer for faster access
                     let copy_len = data.len().min(image_processing_buffer.len());
                     image_processing_buffer[..copy_len].copy_from_slice(&data[..copy_len]);
-                    
+
                     // TODO: Implement actual image processing and display
                     // Process image from buffer for better performance
                 } else {
-                    warn!("Core 1: Image too large for buffer ({} > {} bytes)", data.len(), image_processing_buffer.len());
+                    warn!(
+                        "Core 1: Image too large for buffer ({} > {} bytes)",
+                        data.len(),
+                        image_processing_buffer.len()
+                    );
                 }
             }
             productiondeck::types::DisplayCommand::SetBrightness(brightness) => {

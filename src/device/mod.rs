@@ -1,14 +1,13 @@
 //! Device abstraction layer for StreamDeck compatible devices
-//! 
+//!
 //! This module provides a unified interface for different StreamDeck models,
 //! abstracting away device-specific configurations, protocols, and capabilities.
 
 pub mod mini;
 pub mod original;
 pub mod original_v2;
-pub mod xl;
 pub mod plus;
-
+pub mod xl;
 
 /// Image format supported by StreamDeck devices
 #[derive(Debug, Clone, Copy, PartialEq, defmt::Format)]
@@ -92,16 +91,16 @@ pub struct UsbConfig {
 pub trait DeviceConfig {
     /// Get device name for identification
     fn device_name(&self) -> &'static str;
-    
+
     /// Get button layout configuration
     fn button_layout(&self) -> ButtonLayout;
-    
+
     /// Get display configuration
     fn display_config(&self) -> DisplayConfig;
-    
+
     /// Get USB configuration
     fn usb_config(&self) -> UsbConfig;
-    
+
     /// Get maximum image data size in bytes
     fn max_image_size(&self) -> usize {
         let display = self.display_config();
@@ -116,12 +115,12 @@ pub trait DeviceConfig {
             }
         }
     }
-    
+
     /// Get HID report descriptor size
     fn hid_descriptor_size(&self) -> usize {
         173 // Standard StreamDeck HID descriptor size
     }
-    
+
     /// Get input report size (button states)
     fn input_report_size(&self) -> usize {
         match self.usb_config().protocol {
@@ -131,12 +130,12 @@ pub trait DeviceConfig {
             ProtocolVersion::Module15_32Keys => 512,
         }
     }
-    
+
     /// Get feature report size
     fn feature_report_size(&self) -> usize {
         32 // Standard feature report size
     }
-    
+
     /// Get output report size (image data)
     fn output_report_size(&self) -> usize {
         1024 // Standard 1KB output report size
@@ -173,12 +172,14 @@ impl Device {
             _ => None,
         }
     }
-    
+
     /// Get all supported device PIDs
     pub fn supported_pids() -> &'static [u16] {
-        &[0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084, 0x00B8, 0x00B9, 0x00BA]
+        &[
+            0x0060, 0x0063, 0x0080, 0x006d, 0x006c, 0x0084, 0x00B8, 0x00B9, 0x00BA,
+        ]
     }
-    
+
     /// Get PID for this device
     pub fn pid(&self) -> u16 {
         match self {
@@ -209,10 +210,12 @@ impl DeviceConfig for Device {
             Device::Module32Keys => "StreamDeck Module 32 Keys",
         }
     }
-    
+
     fn button_layout(&self) -> ButtonLayout {
         match self {
-            Device::Mini | Device::RevisedMini | Device::Module6Keys => ButtonLayout::new(3, 2, true),
+            Device::Mini | Device::RevisedMini | Device::Module6Keys => {
+                ButtonLayout::new(3, 2, true)
+            }
             Device::Module15Keys => ButtonLayout::new(5, 3, true),
             Device::Module32Keys => ButtonLayout::new(8, 4, true),
             Device::Original => ButtonLayout::new(5, 3, false), // right-to-left
@@ -221,7 +224,7 @@ impl DeviceConfig for Device {
             Device::Plus => ButtonLayout::new(4, 2, true),
         }
     }
-    
+
     fn display_config(&self) -> DisplayConfig {
         match self {
             Device::Mini | Device::RevisedMini | Device::Module6Keys => DisplayConfig {
@@ -282,7 +285,7 @@ impl DeviceConfig for Device {
             },
         }
     }
-    
+
     fn usb_config(&self) -> UsbConfig {
         match self {
             Device::Mini => UsbConfig {

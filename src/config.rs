@@ -2,7 +2,7 @@
 //! RP2040-based StreamDeck compatible device with multi-device support
 
 use crate::device::{Device, DeviceConfig};
-use core::sync::atomic::{AtomicU16, AtomicU8, AtomicI32, Ordering};
+use core::sync::atomic::{AtomicI32, AtomicU16, AtomicU8, Ordering};
 
 // ===================================================================
 // Device Selection Configuration
@@ -93,7 +93,7 @@ pub const USB_SERIAL: &str = "PRODUCTIONDK"; // 12 chars
 pub const USB_BCD_DEVICE: u16 = 0x0200; // Device version 2.0
 
 // ===================================================================
-// Device Specifications - Dynamic based on current device  
+// Device Specifications - Dynamic based on current device
 // ===================================================================
 
 pub fn streamdeck_keys() -> usize {
@@ -142,10 +142,10 @@ pub fn hid_report_size_output() -> usize {
 pub fn btn_row_pins() -> &'static [u8] {
     let rows = streamdeck_rows();
     match rows {
-        2 => &[2, 3],                    // Mini: 2 rows
-        3 => &[2, 3, 7],                 // Original: 3 rows
-        4 => &[2, 3, 7, 9],              // XL: 4 rows
-        _ => &[2, 3],                    // Fallback to 2 rows
+        2 => &[2, 3],       // Mini: 2 rows
+        3 => &[2, 3, 7],    // Original: 3 rows
+        4 => &[2, 3, 7, 9], // XL: 4 rows
+        _ => &[2, 3],       // Fallback to 2 rows
     }
 }
 
@@ -153,7 +153,7 @@ pub fn btn_col_pins() -> &'static [u8] {
     let cols = streamdeck_cols();
     match cols {
         3 => &[4, 5, 6],                     // Mini: 3 cols
-        4 => &[4, 5, 6, 10],                 // Plus: 4 cols  
+        4 => &[4, 5, 6, 10],                 // Plus: 4 cols
         5 => &[4, 5, 6, 10, 11],             // Original: 5 cols
         8 => &[4, 5, 6, 10, 11, 12, 13, 16], // XL: 8 cols
         _ => &[4, 5, 6],                     // Fallback to 3 cols
@@ -272,14 +272,14 @@ pub const STREAMDECK_BRIGHTNESS_RESET_MAGIC: u8 = 0x3E;
 // ===================================================================
 
 pub const ST7735_SWRESET: u8 = 0x01; // Software reset
-pub const ST7735_SLPOUT: u8 = 0x11;  // Sleep out
-pub const ST7735_COLMOD: u8 = 0x3A;  // Color mode
-pub const ST7735_CASET: u8 = 0x2A;   // Column address set
-pub const ST7735_RASET: u8 = 0x2B;   // Row address set
-pub const ST7735_INVOFF: u8 = 0x20;  // Display inversion off
-pub const ST7735_NORON: u8 = 0x13;   // Normal display mode
-pub const ST7735_DISPON: u8 = 0x29;  // Display on
-pub const ST7735_RAMWR: u8 = 0x2C;   // Memory write
+pub const ST7735_SLPOUT: u8 = 0x11; // Sleep out
+pub const ST7735_COLMOD: u8 = 0x3A; // Color mode
+pub const ST7735_CASET: u8 = 0x2A; // Column address set
+pub const ST7735_RASET: u8 = 0x2B; // Row address set
+pub const ST7735_INVOFF: u8 = 0x20; // Display inversion off
+pub const ST7735_NORON: u8 = 0x13; // Normal display mode
+pub const ST7735_DISPON: u8 = 0x29; // Display on
+pub const ST7735_RAMWR: u8 = 0x2C; // Memory write
 
 // ST7735 Color format constants
 pub const ST7735_COLOR_MODE_16BIT: u8 = 0x05; // RGB565 format
@@ -300,7 +300,7 @@ pub const STREAMDECK_KEYS: usize = 6;
 #[deprecated(note = "Use streamdeck_cols() function instead")]
 pub const STREAMDECK_COLS: usize = 3;
 
-#[deprecated(note = "Use streamdeck_rows() function instead")]  
+#[deprecated(note = "Use streamdeck_rows() function instead")]
 pub const STREAMDECK_ROWS: usize = 2;
 
 #[deprecated(note = "Use key_image_size() function instead")]

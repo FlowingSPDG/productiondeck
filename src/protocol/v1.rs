@@ -1,16 +1,15 @@
 //! StreamDeck V1 Protocol Handler
-//! 
+//!
 //! Handles Original, Mini, and Revised Mini devices using BMP format
 
-use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping};
-use crate::protocol::module::ModuleSetCommand;
-use crate::device::ProtocolVersion;
+use super::{ButtonMapping, ImageProcessResult, ProtocolHandlerTrait};
 use crate::config::{
-    IMAGE_PROCESSING_BUFFER_SIZE,
-    STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3,
-    STREAMDECK_RESET_MAGIC, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
-    FEATURE_REPORT_RESET_V1, FEATURE_REPORT_BRIGHTNESS_V1, FEATURE_REPORT_IDLE_TIME
+    FEATURE_REPORT_BRIGHTNESS_V1, FEATURE_REPORT_IDLE_TIME, FEATURE_REPORT_RESET_V1,
+    IMAGE_PROCESSING_BUFFER_SIZE, STREAMDECK_BRIGHTNESS_RESET_MAGIC, STREAMDECK_MAGIC_1,
+    STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
 };
+use crate::device::ProtocolVersion;
+use crate::protocol::module::ModuleSetCommand;
 use heapless::Vec;
 
 /// V1 Protocol Handler for BMP-based StreamDeck devices
@@ -29,7 +28,7 @@ impl V1Handler {
             expected_key: 0,
         }
     }
-    
+
     /// Reset image reception state
     fn reset_image_state(&mut self) {
         self.image_buffer.clear();
@@ -42,13 +41,13 @@ impl ProtocolHandlerTrait for V1Handler {
     fn version(&self) -> ProtocolVersion {
         ProtocolVersion::V1
     }
-    
+
     fn process_image_packet(&mut self, data: &[u8]) -> ImageProcessResult {
         if data.len() < 8 {
             // Swallow malformed packets to avoid host-side errors
             return ImageProcessResult::Incomplete;
         }
-        
+
         // V1 Protocol format primary: [0x02, 0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, image_data...]
         // Accept variant where report ID (0x02) is stripped by HID stack: [0x01, packet_num, 0x00, 0x00, key_id, 0x00, 0x00, data...]
         let (packet_num, key_id, data_start) = if data[0] == 0x02 && data.len() >= 6 {
@@ -58,47 +57,61 @@ impl ProtocolHandlerTrait for V1Handler {
         } else {
             return ImageProcessResult::Incomplete;
         };
-        
+
         // First packet starts image reception
         if packet_num == 0x01 {
             self.reset_image_state();
             self.receiving_image = true;
             self.expected_key = key_id;
-            
+
             // Skip header and copy image data
             if data.len() > data_start {
-                if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
+                if self
+                    .image_buffer
+                    .extend_from_slice(&data[data_start..])
+                    .is_err()
+                {
                     self.reset_image_state();
                     return ImageProcessResult::Incomplete;
                 }
             }
-            
+
             ImageProcessResult::Incomplete
         } else if packet_num == 0x02 && self.receiving_image && key_id == self.expected_key {
             // Second packet completes the image
             if data.len() > data_start {
-                if self.image_buffer.extend_from_slice(&data[data_start..]).is_err() {
+                if self
+                    .image_buffer
+                    .extend_from_slice(&data[data_start..])
+                    .is_err()
+                {
                     self.reset_image_state();
                     return ImageProcessResult::Incomplete;
                 }
             }
-            
+
             // V1 image is complete
             let mut complete_image = Vec::new();
             let _ = complete_image.extend_from_slice(&self.image_buffer);
             self.reset_image_state();
-            
+
             ImageProcessResult::Complete(complete_image)
         } else {
             // Ignore unexpected sequences for now
             ImageProcessResult::Incomplete
         }
     }
-    
-    fn map_buttons(&self, physical_buttons: &[bool], cols: usize, rows: usize, left_to_right: bool) -> ButtonMapping {
+
+    fn map_buttons(
+        &self,
+        physical_buttons: &[bool],
+        cols: usize,
+        rows: usize,
+        left_to_right: bool,
+    ) -> ButtonMapping {
         let mut mapped_buttons = [false; 32];
         let total_keys = cols * rows;
-        
+
         for (physical_idx, &pressed) in physical_buttons.iter().take(total_keys).enumerate() {
             let mapped_idx = if left_to_right {
                 physical_idx // Direct mapping for Mini and Revised Mini
@@ -109,18 +122,18 @@ impl ProtocolHandlerTrait for V1Handler {
                 let reversed_col = cols - 1 - col;
                 row * cols + reversed_col
             };
-            
+
             if mapped_idx < 32 {
                 mapped_buttons[mapped_idx] = pressed;
             }
         }
-        
+
         ButtonMapping {
             mapped_buttons,
             active_count: total_keys,
         }
     }
-    
+
     fn hid_descriptor(&self) -> &'static [u8] {
         // V1 StreamDeck HID descriptor (generic V1 implementation)
         // NOTE: Do not force the exact Mini (173-byte) descriptor here.
@@ -202,48 +215,48 @@ impl ProtocolHandlerTrait for V1Handler {
             0x95, 0x10, // Report Count (16)
             0x85, 0xa2, // Report ID (0xa2)
             0xb1, 0x04, // Feature (Data,Array,Rel)
-            0xc0 // End Collection
+            0xc0, // End Collection
         ]
     }
-    
+
     fn input_report_size(&self, button_count: usize) -> usize {
         // V1 input reports: Report ID (1 byte) + button states (RP2040 USB hardware limitation)
         1 + button_count
     }
-    
+
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
         if report.is_empty() {
             return 0;
         }
-        
+
         // V1 format: [0x01, button_states...]
         report[0] = 0x01; // Report ID
-        
+
         let button_bytes = buttons.active_count.min(report.len() - 1);
-        
+
         // Write actual button states
         for i in 0..button_bytes {
             report[i + 1] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
-        
+
         // Fill remaining bytes with 0
         for i in (button_bytes + 1)..report.len() {
             report[i] = 0;
         }
-        
+
         1 + button_bytes
     }
-    
+
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
         match report_id {
             FEATURE_REPORT_BRIGHTNESS_V1 => {
                 // V1 Brightness/Reset: [0x05, 0x55, 0xAA, 0xD1, 0x01, value, ...]
-                if data.len() >= 6 
-                    && data[1] == STREAMDECK_MAGIC_1 
-                    && data[2] == STREAMDECK_MAGIC_2 
-                    && data[3] == STREAMDECK_MAGIC_3 
-                    && data[4] == 0x01 {
-                    
+                if data.len() >= 6
+                    && data[1] == STREAMDECK_MAGIC_1
+                    && data[2] == STREAMDECK_MAGIC_2
+                    && data[3] == STREAMDECK_MAGIC_3
+                    && data[4] == 0x01
+                {
                     if data[5] == STREAMDECK_BRIGHTNESS_RESET_MAGIC {
                         Some(ModuleSetCommand::Reset)
                     } else {
@@ -274,7 +287,9 @@ impl ProtocolHandlerTrait for V1Handler {
         match report_id {
             0xA0 | 0xA1 | 0xA2 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -288,7 +303,9 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x03 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -302,7 +319,9 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x04 => {
                 let total_len = 17.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 let version = b"3.00.000";
                 let start = 5;
@@ -312,7 +331,9 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x05 => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 buf[1] = 0x0c; // Length
                 buf[2] = 0x31; // Type
@@ -326,7 +347,9 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             crate::config::FEATURE_REPORT_GET_IDLE_TIME => {
                 let total_len = 32.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 buf[1] = 0x06;
                 let seconds = crate::config::get_idle_time_seconds() as i32;
@@ -339,7 +362,9 @@ impl ProtocolHandlerTrait for V1Handler {
             }
             0x07 => {
                 let total_len = 16.min(buf.len());
-                for i in 0..total_len { buf[i] = 0x00; }
+                for i in 0..total_len {
+                    buf[i] = 0x00;
+                }
                 buf[0] = report_id;
                 Some(total_len)
             }

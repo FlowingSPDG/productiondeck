@@ -1,22 +1,24 @@
 //! USB HID implementation for StreamDeck compatibility
-//! 
+//!
 //! This module implements a flexible USB HID protocol that supports multiple
 //! StreamDeck device types through device abstraction and protocol handlers.
 
+use crate::channels::{BUTTON_CHANNEL, DISPLAY_CHANNEL, USB_COMMAND_CHANNEL};
+use crate::config;
+use crate::device::{Device, DeviceConfig};
+use crate::protocol::module::ModuleSetCommand;
+use crate::protocol::{ImageProcessResult, ProtocolHandler};
+use crate::types::{DisplayCommand, UsbCommand};
 use defmt::*;
 use embassy_rp::gpio::Output;
 use embassy_rp::peripherals;
 use embassy_rp::usb::Driver;
 use embassy_time::{Duration, Timer};
-use embassy_usb::class::hid::{HidReaderWriter, RequestHandler, ReportId, State, Config as HidConfig};
+use embassy_usb::class::hid::{
+    Config as HidConfig, HidReaderWriter, ReportId, RequestHandler, State,
+};
 use embassy_usb::control::OutResponse;
 use embassy_usb::{Builder, Config};
-use crate::config;
-use crate::device::{Device, DeviceConfig};
-use crate::protocol::{ProtocolHandler, ImageProcessResult};
-use crate::protocol::module::ModuleSetCommand;
-use crate::channels::{BUTTON_CHANNEL, USB_COMMAND_CHANNEL, DISPLAY_CHANNEL};
-use crate::types::{UsbCommand, DisplayCommand};
 
 // ===================================================================
 // USB Configuration
@@ -34,10 +36,10 @@ fn create_usb_config_for_device(device: Device) -> Config<'static> {
     usb_config.device_sub_class = 0x00;
     usb_config.device_protocol = 0x00;
     usb_config.composite_with_iads = false;
-    
+
     // Set device version to match real StreamDeck devices
     usb_config.device_release = config::USB_BCD_DEVICE;
-    
+
     usb_config
 }
 
@@ -47,14 +49,19 @@ fn create_usb_config_for_device(device: Device) -> Config<'static> {
 
 struct StreamDeckHidHandler {
     protocol_handler: ProtocolHandler,
-    usb_command_sender: embassy_sync::channel::Sender<'static, embassy_sync::blocking_mutex::raw::ThreadModeRawMutex, UsbCommand, 4>,
+    usb_command_sender: embassy_sync::channel::Sender<
+        'static,
+        embassy_sync::blocking_mutex::raw::ThreadModeRawMutex,
+        UsbCommand,
+        4,
+    >,
 }
 
 impl StreamDeckHidHandler {
     fn new_for_device(device: Device) -> Self {
         let protocol_version = device.usb_config().protocol;
         let protocol_handler = ProtocolHandler::create(protocol_version);
-        
+
         Self {
             protocol_handler,
             usb_command_sender: USB_COMMAND_CHANNEL.sender(),
@@ -65,7 +72,7 @@ impl StreamDeckHidHandler {
 impl RequestHandler for StreamDeckHidHandler {
     fn get_report(&mut self, id: ReportId, buf: &mut [u8]) -> Option<usize> {
         info!("HID Get Report: ID={:?}, buf_len={}", id, buf.len());
-        
+
         match id {
             ReportId::In(_) => {
                 // Button state will be sent via separate input reports
@@ -81,10 +88,11 @@ impl RequestHandler for StreamDeckHidHandler {
 
     fn set_report(&mut self, id: ReportId, data: &[u8]) -> OutResponse {
         info!("HID Set Report: ID={:?}, len={}", id, data.len());
-        
+
         match id {
             ReportId::Feature(report_id) => {
-                if let Some(command) = self.protocol_handler.handle_feature_report(report_id, data) {
+                if let Some(command) = self.protocol_handler.handle_feature_report(report_id, data)
+                {
                     match command {
                         ModuleSetCommand::Reset => {
                             info!("Processing reset command");
@@ -92,7 +100,9 @@ impl RequestHandler for StreamDeckHidHandler {
                         }
                         ModuleSetCommand::SetBrightness { value } => {
                             info!("Processing brightness command: {}%", value);
-                            let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(value));
+                            let _ = self
+                                .usb_command_sender
+                                .try_send(UsbCommand::SetBrightness(value));
                         }
                         ModuleSetCommand::SetIdleTime { seconds } => {
                             crate::config::set_idle_time_seconds(seconds);
@@ -107,7 +117,7 @@ impl RequestHandler for StreamDeckHidHandler {
             }
             _ => {}
         }
-        
+
         OutResponse::Accepted
     }
 }
@@ -116,19 +126,25 @@ impl StreamDeckHidHandler {
     fn handle_output_report(&mut self, data: &[u8]) {
         debug!("USB Output Report: {} bytes received", data.len());
         if data.len() >= 8 {
-            debug!("Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
-                   data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);
+            debug!(
+                "Header: [{:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}, {:02X}]",
+                data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]
+            );
         }
 
         match self.protocol_handler.process_image_packet(data) {
             ImageProcessResult::Complete(image_data) => {
                 // Extract key_id from the packet header
                 let key_id = if data.len() >= 3 { data[2] } else { 0 };
-                
-                info!("Image complete for key {} ({} bytes)", key_id, image_data.len());
-                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { 
-                    key_id, 
-                    data: image_data 
+
+                info!(
+                    "Image complete for key {} ({} bytes)",
+                    key_id,
+                    image_data.len()
+                );
+                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData {
+                    key_id,
+                    data: image_data,
                 });
             }
             ImageProcessResult::Incomplete => {
@@ -146,10 +162,7 @@ impl StreamDeckHidHandler {
 // ===================================================================
 
 #[embassy_executor::task]
-pub async fn usb_task(
-    driver: Driver<'static, peripherals::USB>,
-    usb_led: Output<'static>,
-) {
+pub async fn usb_task(driver: Driver<'static, peripherals::USB>, usb_led: Output<'static>) {
     usb_task_impl(driver, usb_led, config::get_current_device()).await
 }
 
@@ -168,13 +181,15 @@ async fn usb_task_impl(
     device: Device,
 ) {
     info!("USB task started");
-    
+
     info!("USB HID device: {}", device.device_name());
     info!("Protocol: {:?}", device.usb_config().protocol);
-    info!("Button layout: {}x{} ({} keys)", 
-          device.button_layout().cols, 
-          device.button_layout().rows, 
-          device.button_layout().total_keys);
+    info!(
+        "Button layout: {}x{} ({} keys)",
+        device.button_layout().cols,
+        device.button_layout().rows,
+        device.button_layout().total_keys
+    );
 
     // Create USB configuration for specific device
     let usb_config = create_usb_config_for_device(device);
@@ -201,11 +216,11 @@ async fn usb_task_impl(
     unsafe {
         REQUEST_HANDLER = Some(StreamDeckHidHandler::new_for_device(device));
     }
-    
+
     // Get HID descriptor from protocol handler
     let protocol_handler = ProtocolHandler::create(device.usb_config().protocol);
     let hid_descriptor = protocol_handler.hid_descriptor();
-    
+
     let hid_config = HidConfig {
         report_descriptor: hid_descriptor,
         #[allow(static_mut_refs)]
@@ -213,12 +228,16 @@ async fn usb_task_impl(
         poll_ms: config::USB_POLL_RATE_MS as u8,
         max_packet_size: 64, // RP2040 USB hardware limitation
     };
-    
-    info!("HID configuration created with report descriptor size: {} bytes", hid_descriptor.len());
-    
+
+    info!(
+        "HID configuration created with report descriptor size: {} bytes",
+        hid_descriptor.len()
+    );
+
     static mut HID_STATE: State = State::new();
     #[allow(static_mut_refs)]
-    let hid = unsafe { HidReaderWriter::<_, 64, 4096>::new(&mut builder, &mut HID_STATE, hid_config) };
+    let hid =
+        unsafe { HidReaderWriter::<_, 64, 4096>::new(&mut builder, &mut HID_STATE, hid_config) };
 
     // Build USB device
     let mut usb = builder.build();
@@ -237,17 +256,30 @@ async fn usb_task_impl(
             match receiver.receive().await {
                 UsbCommand::Reset => {
                     info!("Processing reset command");
-                    let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::ClearAll).await;
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::ClearAll)
+                        .await;
                 }
                 UsbCommand::SetBrightness(brightness) => {
                     info!("Processing brightness command: {}%", brightness);
-                    let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::SetBrightness(brightness)).await;
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::SetBrightness(brightness))
+                        .await;
                 }
                 UsbCommand::ImageData { key_id, data } => {
-                    debug!("Processing image data for key {} ({} bytes)", key_id, data.len());
+                    debug!(
+                        "Processing image data for key {} ({} bytes)",
+                        key_id,
+                        data.len()
+                    );
                     // Send to core 1 for processing via inter-core channel
                     // TODO: Replace with actual inter-core channel when implemented
-                    let _ = DISPLAY_CHANNEL.sender().send(DisplayCommand::DisplayImage { key_id, data }).await;
+                    let _ = DISPLAY_CHANNEL
+                        .sender()
+                        .send(DisplayCommand::DisplayImage { key_id, data })
+                        .await;
                 }
             }
         }
@@ -277,7 +309,8 @@ async fn usb_task_impl(
                     );
 
                     let mut report = [0u8; 64]; // RP2040 USB hardware limitation
-                    let report_len = protocol_handler.format_button_report(&button_mapping, &mut report);
+                    let report_len =
+                        protocol_handler.format_button_report(&button_mapping, &mut report);
 
                     if report_len > 0 {
                         match writer.write(&report[..report_len]).await {
@@ -303,10 +336,24 @@ async fn usb_task_impl(
                             match out_protocol.process_image_packet(data) {
                                 ImageProcessResult::Complete(image_data) => {
                                     // Extract key id robustly: try V2 ([0x02,0x07,key,..]) or stripped ([0x07,key,..])
-                                    let key_guess = if data.len() >= 3 && data[0] == 0x02 { data[2] } else if data.len() >= 2 { data[1] } else { 0 };
+                                    let key_guess = if data.len() >= 3 && data[0] == 0x02 {
+                                        data[2]
+                                    } else if data.len() >= 2 {
+                                        data[1]
+                                    } else {
+                                        0
+                                    };
                                     let img_len = image_data.len();
-                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(UsbCommand::ImageData { key_id: key_guess, data: image_data });
-                                    info!("Image complete for key {} ({} bytes)", key_guess, img_len);
+                                    let _ = USB_COMMAND_CHANNEL.sender().try_send(
+                                        UsbCommand::ImageData {
+                                            key_id: key_guess,
+                                            data: image_data,
+                                        },
+                                    );
+                                    info!(
+                                        "Image complete for key {} ({} bytes)",
+                                        key_guess, img_len
+                                    );
                                 }
                                 ImageProcessResult::Incomplete => {
                                     // Silent - most packets are incomplete until final one

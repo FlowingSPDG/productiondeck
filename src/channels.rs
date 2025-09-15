@@ -3,9 +3,9 @@
 //! This module defines all the Embassy channels used for communication
 //! between different tasks in the ProductionDeck application.
 
+use crate::types::{ButtonState, DisplayCommand, UsbCommand};
 use embassy_sync::blocking_mutex::raw::ThreadModeRawMutex;
 use embassy_sync::channel::Channel;
-use crate::types::{ButtonState, UsbCommand, DisplayCommand};
 
 /// Channel for button state communication from button task to USB task
 /// Buffer size: 1 (latest state only)
