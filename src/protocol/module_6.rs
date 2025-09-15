@@ -4,8 +4,7 @@
 //! Modules per public HID API docs. Image upload parsing is stubbed until we
 //! confirm exact chunk layout from PCAPs.
 
-use heapless::Vec;
-use crate::{config::IMAGE_BUFFER_SIZE, protocol::module::{FirmwareType, ModuleSetCommand, ModuleGetCommand}};
+use crate::{protocol::module::{FirmwareType, ModuleSetCommand, ModuleGetCommand}};
 use crate::device::ProtocolVersion;
 use super::{ProtocolHandlerTrait, ImageProcessResult, ButtonMapping, ProtocolCommand};
 
@@ -151,7 +150,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         DESC
     }
 
-    fn input_report_size(&self, button_count: usize) -> usize {
+    fn input_report_size(&self, _button_count: usize) -> usize {
         65
     }
 

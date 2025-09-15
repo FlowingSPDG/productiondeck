@@ -6,7 +6,7 @@ pub mod v1;
 pub mod v2;
 pub mod module;
 pub mod module_6;
-/// pub mod module_15_32;
+pub mod module_15_32;
 
 use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
@@ -81,7 +81,7 @@ pub enum ProtocolHandler {
     V1(v1::V1Handler),
     V2(v2::V2Handler),
     Module6Keys(module_6::Module6KeysHandler),
-    // Module15_32Keys(module_15_32::Module15_32KeysHandler),
+    Module15_32Keys(module_15_32::Module15_32KeysHandler),
 }
 
 impl ProtocolHandler {
@@ -91,7 +91,7 @@ impl ProtocolHandler {
             ProtocolVersion::V1 => ProtocolHandler::V1(v1::V1Handler::new()),
             ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new()),
             ProtocolVersion::Module6Keys => ProtocolHandler::Module6Keys(module_6::Module6KeysHandler::new()),
-            // ProtocolVersion::Module15_32Keys => ProtocolHandler::Module15_32Keys(module_15_32::Module15_32KeysHandler::new()),
+            ProtocolVersion::Module15_32Keys => ProtocolHandler::Module15_32Keys(module_15_32::Module15_32KeysHandler::new()),
         }
     }
     
@@ -101,7 +101,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(_) => ProtocolVersion::V1,
             ProtocolHandler::V2(_) => ProtocolVersion::V2,
             ProtocolHandler::Module6Keys(_) => ProtocolVersion::Module6Keys,
-            // ProtocolHandler::Module15_32Keys(_) => ProtocolVersion::Module15_32Keys,
+            ProtocolHandler::Module15_32Keys(_) => ProtocolVersion::Module15_32Keys,
         }
     }
     
@@ -111,7 +111,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.process_image_packet(data),
             ProtocolHandler::V2(handler) => handler.process_image_packet(data),
             ProtocolHandler::Module6Keys(handler) => handler.process_image_packet(data),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.process_image_packet(data),
+            ProtocolHandler::Module15_32Keys(handler) => handler.process_image_packet(data),
         }
     }
     
@@ -121,7 +121,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
             ProtocolHandler::V2(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
             ProtocolHandler::Module6Keys(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
+            ProtocolHandler::Module15_32Keys(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
         }
     }
     
@@ -131,7 +131,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.hid_descriptor(),
             ProtocolHandler::V2(handler) => handler.hid_descriptor(),
             ProtocolHandler::Module6Keys(handler) => handler.hid_descriptor(),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.hid_descriptor(),
+            ProtocolHandler::Module15_32Keys(handler) => handler.hid_descriptor(),
         }
     }
     
@@ -141,7 +141,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.input_report_size(button_count),
             ProtocolHandler::V2(handler) => handler.input_report_size(button_count),
             ProtocolHandler::Module6Keys(handler) => handler.input_report_size(button_count),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.input_report_size(button_count),
+            ProtocolHandler::Module15_32Keys(handler) => handler.input_report_size(button_count),
         }
     }
     
@@ -151,7 +151,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::V2(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::Module6Keys(handler) => handler.format_button_report(buttons, report),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.format_button_report(buttons, report),
+            ProtocolHandler::Module15_32Keys(handler) => handler.format_button_report(buttons, report),
         }
     }
     
@@ -161,7 +161,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::V2(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::Module6Keys(handler) => handler.handle_feature_report(report_id, data),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.handle_feature_report(report_id, data),
+            ProtocolHandler::Module15_32Keys(handler) => handler.handle_feature_report(report_id, data),
         }
     }
 
@@ -171,7 +171,7 @@ impl ProtocolHandler {
             ProtocolHandler::V1(handler) => handler.get_feature_report(report_id, buf),
             ProtocolHandler::V2(handler) => handler.get_feature_report(report_id, buf),
             ProtocolHandler::Module6Keys(handler) => handler.get_feature_report(report_id, buf),
-            // ProtocolHandler::Module15_32Keys(handler) => handler.get_feature_report(report_id, buf),
+            ProtocolHandler::Module15_32Keys(handler) => handler.get_feature_report(report_id, buf),
         }
     }
 }

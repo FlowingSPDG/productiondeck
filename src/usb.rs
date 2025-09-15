@@ -21,10 +21,6 @@ use crate::types::{UsbCommand, DisplayCommand};
 // USB Configuration
 // ===================================================================
 
-fn create_usb_config() -> Config<'static> {
-    create_usb_config_for_device(config::get_current_device())
-}
-
 fn create_usb_config_for_device(device: Device) -> Config<'static> {
     let usb_config_data = device.usb_config();
     let mut usb_config = Config::new(usb_config_data.vid, usb_config_data.pid);
@@ -49,22 +45,16 @@ fn create_usb_config_for_device(device: Device) -> Config<'static> {
 // ===================================================================
 
 struct StreamDeckHidHandler {
-    device_config: Device,
     protocol_handler: ProtocolHandler,
     usb_command_sender: embassy_sync::channel::Sender<'static, embassy_sync::blocking_mutex::raw::ThreadModeRawMutex, UsbCommand, 4>,
 }
 
 impl StreamDeckHidHandler {
-    fn new() -> Self {
-        Self::new_for_device(config::get_current_device())
-    }
-    
     fn new_for_device(device: Device) -> Self {
         let protocol_version = device.usb_config().protocol;
         let protocol_handler = ProtocolHandler::create(protocol_version);
         
         Self {
-            device_config: device,
             protocol_handler,
             usb_command_sender: USB_COMMAND_CHANNEL.sender(),
         }

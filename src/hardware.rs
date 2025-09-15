@@ -14,7 +14,7 @@ use heapless::Vec;
 use crate::config;
 use crate::device::{Device, DeviceConfig};
 use crate::usb::usb_task_for_device;
-use crate::buttons::{button_task_matrix, button_task_direct};
+use crate::buttons::{button_task_matrix_3x2, button_task_matrix_5x3, button_task_matrix_8x4, button_task_direct};
 
 /// Hardware configuration for a specific StreamDeck device
 pub struct HardwareConfig {
@@ -230,8 +230,34 @@ fn create_all_pins_for_device(
                 let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
                 let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
             }
+            (3, 5) => {
+                // 15 Keys Module (5x3)
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+            }
+            (4, 8) => {
+                // 32 Keys Module (8x4)
+                let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_7, Level::High));
+                let _ = row_pins.push(Output::new(p.PIN_9, Level::High));
+                let _ = col_pins.push(Input::new(p.PIN_4, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_5, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_6, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_10, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_11, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_12, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_13, Pull::Up));
+                let _ = col_pins.push(Input::new(p.PIN_16, Pull::Up));
+            }
             _ => {
-                // For now, all other devices use the same pin layout as Mini
+                // Fallback to Mini layout if unknown
                 warn!("Using Mini button layout for {} - implement device-specific layout", device.device_name());
                 let _ = row_pins.push(Output::new(p.PIN_2, Level::High));
                 let _ = row_pins.push(Output::new(p.PIN_3, Level::High));
@@ -258,22 +284,48 @@ fn spawn_button_task_with_pins(
             let layout = device.button_layout();
             match (layout.rows, layout.cols) {
                 (2, 3) => {
-                    let row0 = row_pins.pop().unwrap();
                     let row1 = row_pins.pop().unwrap();
-                    let col0 = col_pins.pop().unwrap();
-                    let col1 = col_pins.pop().unwrap();
+                    let row0 = row_pins.pop().unwrap();
                     let col2 = col_pins.pop().unwrap();
-                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                    let col1 = col_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2))
+                }
+                (3, 5) => {
+                    let row2 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let row0 = row_pins.pop().unwrap();
+                    let col4 = col_pins.pop().unwrap();
+                    let col3 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix_5x3(row0, row1, row2, col0, col1, col2, col3, col4))
+                }
+                (4, 8) => {
+                    let row3 = row_pins.pop().unwrap();
+                    let row2 = row_pins.pop().unwrap();
+                    let row1 = row_pins.pop().unwrap();
+                    let row0 = row_pins.pop().unwrap();
+                    let col7 = col_pins.pop().unwrap();
+                    let col6 = col_pins.pop().unwrap();
+                    let col5 = col_pins.pop().unwrap();
+                    let col4 = col_pins.pop().unwrap();
+                    let col3 = col_pins.pop().unwrap();
+                    let col2 = col_pins.pop().unwrap();
+                    let col1 = col_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix_8x4(row0, row1, row2, row3, col0, col1, col2, col3, col4, col5, col6, col7))
                 }
                 _ => {
-                    // Until wider matrix support lands, warn and use first 2x3
-                    warn!("Matrix mode not fully implemented for this device; using Mini layout subset");
-                    let row0 = row_pins.pop().unwrap();
+                    // Fallback to 2x3 minimal
+                    warn!("Unknown layout; falling back to 2x3 matrix task");
                     let row1 = row_pins.pop().unwrap();
-                    let col0 = col_pins.pop().unwrap();
-                    let col1 = col_pins.pop().unwrap();
+                    let row0 = row_pins.pop().unwrap();
                     let col2 = col_pins.pop().unwrap();
-                    spawner.spawn(button_task_matrix(row0, row1, col0, col1, col2))
+                    let col1 = col_pins.pop().unwrap();
+                    let col0 = col_pins.pop().unwrap();
+                    spawner.spawn(button_task_matrix_3x2(row0, row1, col0, col1, col2))
                 }
             }
         }
