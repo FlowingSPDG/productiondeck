@@ -17,6 +17,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libudev-dev
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -53,18 +58,28 @@ jobs:
       run: cargo check --verbose
 
     - name: Build firmware (debug)
-      run: cargo build --verbose
+      run: cargo build --verbose --target thumbv6m-none-eabi --bins
 
     - name: Build firmware (release)
-      run: cargo build --release --verbose
+      run: cargo build --release --verbose --target thumbv6m-none-eabi --bins
 
-    - name: Check UF2 file generation
+    - name: Verify embedded binaries exist
       run: |
-        if [ -f "target/thumbv6m-none-eabi/release/productiondeck.uf2" ]; then
-          echo "✅ UF2 file generated successfully"
-          ls -la target/thumbv6m-none-eabi/release/productiondeck*
-        else
-          echo "❌ UF2 file not found"
+        set -euo pipefail
+        expected=(mini module6 module15 module32 original original-v2 plus revised-mini xl)
+        missing=0
+        for bin in "${expected[@]}"; do
+          if [ -f "target/thumbv6m-none-eabi/release/$bin" ]; then
+            echo "✅ Found target/thumbv6m-none-eabi/release/$bin"
+          else
+            echo "❌ Missing target/thumbv6m-none-eabi/release/$bin"
+            missing=1
+          fi
+        done
+        echo "\nListing built files:"
+        ls -la target/thumbv6m-none-eabi/release || true
+        if [ "$missing" -ne 0 ]; then
+          echo "One or more expected binaries are missing"
           exit 1
         fi
 
@@ -74,8 +89,15 @@ jobs:
       with:
         name: firmware-${{ github.sha }}
         path: |
-          target/thumbv6m-none-eabi/release/productiondeck
-          target/thumbv6m-none-eabi/release/productiondeck.uf2
+          target/thumbv6m-none-eabi/release/mini
+          target/thumbv6m-none-eabi/release/module6
+          target/thumbv6m-none-eabi/release/module15
+          target/thumbv6m-none-eabi/release/module32
+          target/thumbv6m-none-eabi/release/original
+          target/thumbv6m-none-eabi/release/original-v2
+          target/thumbv6m-none-eabi/release/plus
+          target/thumbv6m-none-eabi/release/revised-mini
+          target/thumbv6m-none-eabi/release/xl
         retention-days: 30
 
   security-audit:

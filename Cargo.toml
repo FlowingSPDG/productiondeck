@@ -102,5 +102,23 @@ path = "src/bin/plus.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "module6"
+path = "src/bin/module6.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "module15"
+path = "src/bin/module15.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "module32"
+path = "src/bin/module32.rs"
+test = false
+bench = false
+
 [features]
 default = []

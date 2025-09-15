@@ -1,5 +1,5 @@
 //! ProductionDeck - StreamDeck Original Compatible Firmware
-//! 
+//!
 //! This binary builds firmware specifically for StreamDeck Original compatibility:
 //! - 15 keys in 5x3 layout
 //! - 72x72 pixel images per key
@@ -10,9 +10,9 @@
 #![no_main]
 
 use defmt::*;
+use defmt_rtt as _;
 use embassy_executor::Spawner;
 use panic_halt as _;
-use defmt_rtt as _;
 
 // Set compile-time device selection
 const DEVICE: productiondeck::device::Device = productiondeck::device::Device::Original;
@@ -29,13 +29,13 @@ use productiondeck::*;
 async fn main(spawner: Spawner) {
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
-    
+
     // Create application supervisor for Original
     let mut supervisor = supervisor::AppSupervisor::new_for_device(DEVICE);
-    
+
     // Print startup information
     supervisor.print_startup_banner();
-    
+
     // Initialize and spawn all hardware tasks for Original
     match hardware::init_hardware_tasks_for_device(&spawner, p, DEVICE).await {
         Ok(()) => {
@@ -47,7 +47,7 @@ async fn main(spawner: Spawner) {
             core::panic!("Hardware initialization failed");
         }
     }
-    
+
     // Run the main supervisor loop
     supervisor.run().await;
 }

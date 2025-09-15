@@ -1,11 +1,11 @@
 #![allow(unreachable_code)]
-//! ProductionDeck - StreamDeck Mini Compatible Firmware
+//! ProductionDeck - Stream Deck Module 15 Compatible Firmware
 //!
-//! This binary builds firmware specifically for StreamDeck Mini compatibility:
-//! - 6 keys in 3x2 layout
-//! - 80x80 pixel images per key
-//! - USB VID:PID 0x0fd9:0x0063
-//! - V1 BMP protocol
+//! This binary builds firmware specifically for Stream Deck Module 15 compatibility:
+//! - 15 keys in 5x3 layout
+//! - 72x72 pixel images per key (rotate 180° per spec)
+//! - USB VID:PID 0x0FD9:0x00B9
+//! - Module HID protocol (Input 512B, Output 1024B, Feature 32B)
 
 #![no_std]
 #![no_main]
@@ -20,7 +20,7 @@ use panic_halt as _;
 use static_cell::StaticCell;
 
 // Set compile-time device selection
-const DEVICE: productiondeck::device::Device = productiondeck::device::Device::Mini;
+const DEVICE: productiondeck::device::Device = productiondeck::device::Device::Module15Keys;
 
 // Import all modules from library
 extern crate productiondeck;
@@ -35,13 +35,13 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 8> =
     Channel::new();
 
-/// Main application entry point for StreamDeck Mini with multicore support
+/// Main application entry point for Stream Deck Module 15 with multicore support
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
 
-    // Create application supervisor for Mini
+    // Create application supervisor for Module 15
     let supervisor = supervisor::AppSupervisor::new_for_device(DEVICE);
 
     // Print startup information
@@ -69,35 +69,19 @@ fn main() -> ! {
             embassy_rp::gpio::Output::new(p.PIN_20, embassy_rp::gpio::Level::Low),
             DEVICE
         )));
-        // Spawn button task for Mini (Direct mode)
-        unwrap!(spawner.spawn(buttons::button_task_direct({
-            let mut inputs = heapless::Vec::new();
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_4,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_5,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_6,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_10,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_11,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            let _ = inputs.push(embassy_rp::gpio::Input::new(
-                p.PIN_12,
-                embassy_rp::gpio::Pull::Up,
-            ));
-            inputs
-        })));
+        // Spawn button task for Module 15 (matrix 5x3 = 15 buttons)
+        unwrap!(spawner.spawn(buttons::button_task_matrix_5x3(
+            // rows: 3 outputs (per hardware config: 2, 3, 7)
+            embassy_rp::gpio::Output::new(p.PIN_2, embassy_rp::gpio::Level::High),
+            embassy_rp::gpio::Output::new(p.PIN_3, embassy_rp::gpio::Level::High),
+            embassy_rp::gpio::Output::new(p.PIN_7, embassy_rp::gpio::Level::High),
+            // cols: 5 inputs with pull-ups (per hardware config: 4, 5, 6, 10, 11)
+            embassy_rp::gpio::Input::new(p.PIN_4, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_5, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_6, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_10, embassy_rp::gpio::Pull::Up),
+            embassy_rp::gpio::Input::new(p.PIN_11, embassy_rp::gpio::Pull::Up),
+        )));
         // Spawn status LED task
         unwrap!(spawner.spawn(hardware::status_task(
             embassy_rp::gpio::Output::new(p.PIN_25, embassy_rp::gpio::Level::Low),
@@ -118,7 +102,7 @@ async fn core0_main_task(mut supervisor: supervisor::AppSupervisor) {
 
     // Initialize and spawn core 0 tasks (USB, buttons)
     // Note: spawner is not available in this context, we'll use the existing channel system
-    info!("Core 0: StreamDeck Mini firmware initialized successfully");
+    info!("Core 0: Stream Deck Module 15 firmware initialized successfully");
     supervisor.print_init_success();
 
     // Run the main supervisor loop
@@ -141,7 +125,7 @@ async fn core1_image_processing_task() {
         }
     }
 
-    // Optimized image processing buffer
+    // Optimized image processing buffer for Module 15 (72x72 JPEG)
     let mut image_processing_buffer = [0u8; 8192]; // 8KB buffer for image processing
 
     // Process display commands from core 0
@@ -161,8 +145,9 @@ async fn core1_image_processing_task() {
                     let copy_len = data.len().min(image_processing_buffer.len());
                     image_processing_buffer[..copy_len].copy_from_slice(&data[..copy_len]);
 
-                    // TODO: Implement actual image processing and display
+                    // TODO: Implement actual image processing and display for Module 15
                     // Process image from buffer for better performance
+                    // Note: Module 15 uses 72x72 JPEG images that need 180° rotation
                 } else {
                     warn!(
                         "Core 1: Image too large for buffer ({} > {} bytes)",

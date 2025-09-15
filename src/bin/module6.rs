@@ -1,11 +1,11 @@
 #![allow(unreachable_code)]
-//! ProductionDeck - StreamDeck Mini Compatible Firmware
+//! ProductionDeck - Stream Deck Module 6 Compatible Firmware
 //!
-//! This binary builds firmware specifically for StreamDeck Mini compatibility:
+//! This binary builds firmware specifically for Stream Deck Module 6 compatibility:
 //! - 6 keys in 3x2 layout
-//! - 80x80 pixel images per key
-//! - USB VID:PID 0x0fd9:0x0063
-//! - V1 BMP protocol
+//! - 80x80 pixel images per key (rotate 90° clockwise per spec)
+//! - USB VID:PID 0x0FD9:0x00B8
+//! - Module HID protocol (Input 65B, Output 1024B, Feature 32B)
 
 #![no_std]
 #![no_main]
@@ -20,7 +20,7 @@ use panic_halt as _;
 use static_cell::StaticCell;
 
 // Set compile-time device selection
-const DEVICE: productiondeck::device::Device = productiondeck::device::Device::Mini;
+const DEVICE: productiondeck::device::Device = productiondeck::device::Device::Module6Keys;
 
 // Import all modules from library
 extern crate productiondeck;
@@ -35,13 +35,13 @@ static EXECUTOR1: StaticCell<Executor> = StaticCell::new();
 static IMAGE_CHANNEL: Channel<CriticalSectionRawMutex, productiondeck::types::DisplayCommand, 8> =
     Channel::new();
 
-/// Main application entry point for StreamDeck Mini with multicore support
+/// Main application entry point for Stream Deck Module 6 with multicore support
 #[cortex_m_rt::entry]
 fn main() -> ! {
     // Initialize hardware
     let p = embassy_rp::init(Default::default());
 
-    // Create application supervisor for Mini
+    // Create application supervisor for Module 6
     let supervisor = supervisor::AppSupervisor::new_for_device(DEVICE);
 
     // Print startup information
@@ -69,7 +69,7 @@ fn main() -> ! {
             embassy_rp::gpio::Output::new(p.PIN_20, embassy_rp::gpio::Level::Low),
             DEVICE
         )));
-        // Spawn button task for Mini (Direct mode)
+        // Spawn button task for Module 6 (Direct mode, 3x2 keys)
         unwrap!(spawner.spawn(buttons::button_task_direct({
             let mut inputs = heapless::Vec::new();
             let _ = inputs.push(embassy_rp::gpio::Input::new(
@@ -118,7 +118,7 @@ async fn core0_main_task(mut supervisor: supervisor::AppSupervisor) {
 
     // Initialize and spawn core 0 tasks (USB, buttons)
     // Note: spawner is not available in this context, we'll use the existing channel system
-    info!("Core 0: StreamDeck Mini firmware initialized successfully");
+    info!("Core 0: Stream Deck Module 6 firmware initialized successfully");
     supervisor.print_init_success();
 
     // Run the main supervisor loop

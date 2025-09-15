@@ -3,8 +3,8 @@
 //! This module contains shared types, enums, and structures that are used
 //! by multiple modules in the application.
 
-use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
+use heapless::Vec;
 
 /// Button state structure for communicating button presses between tasks
 #[derive(Clone, Copy, Debug, defmt::Format)]
@@ -27,7 +27,7 @@ impl ButtonState {
             active_count: active_count.min(32),
         }
     }
-    
+
     /// Check if a specific button is pressed
     pub fn is_pressed(&self, button_index: usize) -> bool {
         if button_index < self.active_count {
@@ -36,7 +36,7 @@ impl ButtonState {
             false
         }
     }
-    
+
     /// Set button state and mark as changed if different
     pub fn set_button(&mut self, button_index: usize, pressed: bool) {
         if button_index < self.active_count && self.buttons[button_index] != pressed {
@@ -48,20 +48,23 @@ impl ButtonState {
 
 /// USB commands that can be sent from the HID handler to other tasks
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum UsbCommand {
     /// Reset device to initial state
     Reset,
     /// Set display brightness (0-100%)
     SetBrightness(u8),
     /// Image data received for a specific key
-    ImageData { 
-        key_id: u8, 
-        data: Vec<u8, IMAGE_BUFFER_SIZE> 
+    ImageData {
+        key_id: u8,
+        #[allow(clippy::large_enum_variant)]
+        data: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
 }
 
 /// Display commands for controlling the display subsystem
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum DisplayCommand {
     /// Clear a specific key display
     Clear(u8),
@@ -70,9 +73,10 @@ pub enum DisplayCommand {
     /// Set display brightness (0-100%)
     SetBrightness(u8),
     /// Display an image on a specific key
-    DisplayImage { 
-        key_id: u8, 
-        data: Vec<u8, IMAGE_BUFFER_SIZE> 
+    DisplayImage {
+        key_id: u8,
+        #[allow(clippy::large_enum_variant)]
+        data: Vec<u8, IMAGE_BUFFER_SIZE>,
     },
 }
 
@@ -85,9 +89,13 @@ pub struct AppVersion {
 
 impl AppVersion {
     pub const fn new(major: u8, minor: u8, patch: u8) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
-    
+
     pub fn as_string(&self) -> &'static str {
         // For embedded, use a simple compile-time string
         "0.1.0"

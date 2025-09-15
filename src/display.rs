@@ -1,5 +1,5 @@
 //! Display driver for shared ST7735 TFT display
-//! 
+//!
 //! This module manages a single 216x144 display divided into 6 regions (72x72 each)
 //! to simulate individual key displays like the StreamDeck Mini.
 
@@ -12,8 +12,8 @@ use embassy_rp::spi::Spi;
 use embassy_time::{Duration, Timer};
 use heapless::Vec;
 
-use crate::config::*;
 use crate::channels::DISPLAY_CHANNEL;
+use crate::config::*;
 use crate::types::DisplayCommand;
 
 // ===================================================================
@@ -54,7 +54,11 @@ impl DisplayController {
     }
 
     async fn init_display(&mut self) {
-        info!("Initializing shared display ({}x{})", crate::config::display_total_width(), crate::config::display_total_height());
+        info!(
+            "Initializing shared display ({}x{})",
+            crate::config::display_total_width(),
+            crate::config::display_total_height()
+        );
 
         // Select the display
         self.cs.set_low();
@@ -80,17 +84,23 @@ impl DisplayController {
         self.send_command(ST7735_CASET).await;
         let width_bytes = (crate::config::display_total_width() - 1) as u16;
         self.send_data(&[
-            0x00, 0x00, // Start column (0)
-            (width_bytes >> 8) as u8, (width_bytes & 0xFF) as u8, // End column
-        ]).await;
+            0x00,
+            0x00, // Start column (0)
+            (width_bytes >> 8) as u8,
+            (width_bytes & 0xFF) as u8, // End column
+        ])
+        .await;
 
         // Row address set (0 to display_total_height-1)
         self.send_command(ST7735_RASET).await;
         let height_bytes = (crate::config::display_total_height() - 1) as u16;
         self.send_data(&[
-            0x00, 0x00, // Start row (0)
-            (height_bytes >> 8) as u8, (height_bytes & 0xFF) as u8, // End row
-        ]).await;
+            0x00,
+            0x00, // Start row (0)
+            (height_bytes >> 8) as u8,
+            (height_bytes & 0xFF) as u8, // End row
+        ])
+        .await;
 
         // Display inversion off
         self.send_command(ST7735_INVOFF).await;
@@ -106,7 +116,7 @@ impl DisplayController {
         self.cs.set_high();
 
         info!("Shared display initialization complete");
-        
+
         // Clear the entire display
         self.clear_all().await;
     }
@@ -114,7 +124,7 @@ impl DisplayController {
     async fn send_command(&mut self, command: u8) {
         // Set DC pin low for command mode
         self.dc.set_low();
-        
+
         // Send command byte
         let _ = self.spi.blocking_write(&[command]);
     }
@@ -122,7 +132,7 @@ impl DisplayController {
     async fn send_data(&mut self, data: &[u8]) {
         // Set DC pin high for data mode
         self.dc.set_high();
-        
+
         // Send data
         let _ = self.spi.blocking_write(data);
     }
@@ -131,16 +141,22 @@ impl DisplayController {
         // Column address set
         self.send_command(ST7735_CASET).await;
         self.send_data(&[
-            (x_start >> 8) as u8, (x_start & 0xFF) as u8,
-            (x_end >> 8) as u8, (x_end & 0xFF) as u8,
-        ]).await;
+            (x_start >> 8) as u8,
+            (x_start & 0xFF) as u8,
+            (x_end >> 8) as u8,
+            (x_end & 0xFF) as u8,
+        ])
+        .await;
 
         // Row address set
         self.send_command(ST7735_RASET).await;
         self.send_data(&[
-            (y_start >> 8) as u8, (y_start & 0xFF) as u8,
-            (y_end >> 8) as u8, (y_end & 0xFF) as u8,
-        ]).await;
+            (y_start >> 8) as u8,
+            (y_start & 0xFF) as u8,
+            (y_end >> 8) as u8,
+            (y_end & 0xFF) as u8,
+        ])
+        .await;
 
         // Memory write
         self.send_command(ST7735_RAMWR).await;
@@ -164,8 +180,10 @@ impl DisplayController {
         let x_end = x_start + image_size as u16 - 1;
         let y_end = y_start + image_size as u16 - 1;
 
-        debug!("Key {} maps to region: ({},{}) to ({},{})", 
-               key_id, x_start, y_start, x_end, y_end);
+        debug!(
+            "Key {} maps to region: ({},{}) to ({},{})",
+            key_id, x_start, y_start, x_end, y_end
+        );
 
         // Select the display
         self.cs.set_low();
@@ -184,7 +202,11 @@ impl DisplayController {
         let expected_size = image_size * image_size * 3;
 
         if rgb_data.len() < expected_size {
-            warn!("Image data too small: {} bytes, expected: {}", rgb_data.len(), expected_size);
+            warn!(
+                "Image data too small: {} bytes, expected: {}",
+                rgb_data.len(),
+                expected_size
+            );
             self.cs.set_high();
             return;
         }
@@ -201,7 +223,9 @@ impl DisplayController {
                 let b = rgb_data[rgb_offset + 2];
 
                 // Convert to RGB565
-                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8) | ((g as u16 & RGB565_GREEN_MASK) << 3) | (b as u16 >> RGB565_BLUE_SHIFT);
+                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8)
+                    | ((g as u16 & RGB565_GREEN_MASK) << 3)
+                    | (b as u16 >> RGB565_BLUE_SHIFT);
 
                 // Send as big-endian
                 buffer[0] = (rgb565 >> 8) as u8;
@@ -213,7 +237,10 @@ impl DisplayController {
         // Deselect display
         self.cs.set_high();
 
-        info!("Image displayed on key {} region: {} pixels", key_id, pixel_count);
+        info!(
+            "Image displayed on key {} region: {} pixels",
+            key_id, pixel_count
+        );
     }
 
     async fn clear_key(&mut self, key_id: u8) {
@@ -259,7 +286,13 @@ impl DisplayController {
         self.cs.set_low();
 
         // Set window to entire display
-        self.set_window(0, 0, crate::config::display_total_width() as u16 - 1, crate::config::display_total_height() as u16 - 1).await;
+        self.set_window(
+            0,
+            0,
+            crate::config::display_total_width() as u16 - 1,
+            crate::config::display_total_height() as u16 - 1,
+        )
+        .await;
 
         // Fill entire display with black
         let black_pixel = [0x00, 0x00];
@@ -276,9 +309,12 @@ impl DisplayController {
     async fn set_brightness(&mut self, brightness: u8) {
         let brightness = brightness.min(100);
         self.current_brightness = brightness;
-        
+
         // TODO: Implement PWM brightness control
-        info!("Brightness set to {}% (PWM not implemented yet)", brightness);
+        info!(
+            "Brightness set to {}% (PWM not implemented yet)",
+            brightness
+        );
     }
 }
 
@@ -329,8 +365,10 @@ impl ImageBuffer {
 
         // Validate sequence
         if !self.receiving || sequence != self.expected_sequence {
-            error!("Image packet sequence error: expected {}, got {}", 
-                   self.expected_sequence, sequence);
+            error!(
+                "Image packet sequence error: expected {}, got {}",
+                self.expected_sequence, sequence
+            );
             self.reset();
             return Err("Sequence error");
         }
@@ -338,8 +376,12 @@ impl ImageBuffer {
         // Copy payload data
         let data_offset = 8;
         let copy_len = (payload_len as usize).min(packet_data.len() - data_offset);
-        
-        if self.data.extend_from_slice(&packet_data[data_offset..data_offset + copy_len]).is_err() {
+
+        if self
+            .data
+            .extend_from_slice(&packet_data[data_offset..data_offset + copy_len])
+            .is_err()
+        {
             error!("Image buffer overflow");
             self.reset();
             return Err("Buffer overflow");
@@ -347,13 +389,22 @@ impl ImageBuffer {
 
         self.expected_sequence += 1;
 
-        debug!("Image packet key={} seq={} len={} total={}", 
-               key_id, sequence, copy_len, self.data.len());
+        debug!(
+            "Image packet key={} seq={} len={} total={}",
+            key_id,
+            sequence,
+            copy_len,
+            self.data.len()
+        );
 
         if is_last {
             self.complete = true;
             self.receiving = false;
-            info!("Image complete for key {} ({} bytes)", key_id, self.data.len());
+            info!(
+                "Image complete for key {} ({} bytes)",
+                key_id,
+                self.data.len()
+            );
             return Ok(true);
         }
 
@@ -375,12 +426,10 @@ pub async fn display_task(
 ) {
     info!("Display task started");
 
-    let mut controller = DisplayController::new(
-        spi, cs, dc, rst, bl
-    ).await;
+    let mut controller = DisplayController::new(spi, cs, dc, rst, bl).await;
 
     let mut image_buffers: [ImageBuffer; 32] = Default::default(); // Max keys for any device
-    
+
     // Initialize image buffers
     for buffer in &mut image_buffers {
         *buffer = ImageBuffer::new();
@@ -402,9 +451,10 @@ pub async fn display_task(
                 controller.set_brightness(brightness).await;
             }
             DisplayCommand::DisplayImage { key_id, data } => {
-                if key_id < 32 { // Max keys for any device
+                if key_id < 32 {
+                    // Max keys for any device
                     let buffer = &mut image_buffers[key_id as usize];
-                    
+
                     match buffer.add_packet(&data) {
                         Ok(true) => {
                             // Image complete, display it

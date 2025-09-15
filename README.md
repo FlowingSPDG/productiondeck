@@ -32,7 +32,9 @@ Build device-specific firmware using: `cargo run --bin <device-name>`
 | **StreamDeck Pedal** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Studio** | ❌ | ❌ | ❌ | Not implemented |
 | **StreamDeck Mobile** | N/A | N/A | N/A | Not Planned |
-| **StreamDeck Module** | N/A | N/A | N/A | Not implemented |
+| **StreamDeck Module 6Keys** | 6 (3x2) | 80x80px | BMP | `module6` | ✅ Alpha |
+| **StreamDeck Module 15Keys** | 15 (5x3) | 72x72px | JPEG | `module15` | ✅ Alpha |
+| **StreamDeck Module 32Keys** | 32 (8x4) | 96x96px | JPEG | `module32` | ✅ Alpha |
 
 ### Implementation Status Legend
 - ✅ **Fully implemented and working**
