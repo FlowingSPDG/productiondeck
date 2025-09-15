@@ -73,6 +73,8 @@ pub enum ProtocolCommand {
     GetUnitSerialNumber,
     GetIdleTime,
     GetUnitInformation{rows: u8, cols: u8, key_width: u16, key_height: u16, image_bpp: u8, image_color_scheme: u8, number_of_key_images_in_image_buffer: u8, number_of_frames_for_demo: u8},
+    SetKeyColor { key_index: u8, r: u8, g: u8, b: u8 },
+    ShowBackgroundByIndex { index: u8 },
 }
 
 /// Enum-based protocol handler for no_std environment

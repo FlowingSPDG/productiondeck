@@ -60,6 +60,7 @@ impl Module6KeysHandler {
             0xA2 => Some(ModuleGetCommand::GetFirmwareVersion(FirmwareType::AP1)),
             0x03 => Some(ModuleGetCommand::GetUnitSerialNumber),
             0xA3 => Some(ModuleGetCommand::GetIdleTime),
+            0x08 => Some(ModuleGetCommand::GetUnitInformation), // Module 6 compatibility
             _ => None,
         }
     }
@@ -107,7 +108,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn hid_descriptor(&self) -> &'static [u8] {
-        // Minimal descriptor covering Input(0x01), Output(0x02), Feature(0x03/0x04/0x05/0x07/0x0B/0xA0/0xA1/0xA2/0xA3)
+        // Minimal descriptor covering Input(0x01), Output(0x02), Feature(0x03/0x04/0x05/0x07/0x08/0x0B/0xA0/0xA1/0xA2/0xA3)
         // This can be fine-tuned to match exact real devices if needed.
         const DESC: &[u8] = &[
             0x05, 0x0C,             // Usage Page (Consumer)
@@ -139,6 +140,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
             0x85, 0x04, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x05, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x07, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
+            0x85, 0x08, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0x0B, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0xA0, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
             0x85, 0xA1, 0x0A, 0x00, 0xFF, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x10, 0xB1, 0x04,
@@ -171,6 +173,9 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
                 ModuleSetCommand::UpdateBootLogo { slice } => Some(ProtocolCommand::UpdateBootLogo { slice_index: slice }),
                 ModuleSetCommand::SetBrightness { value } => Some(ProtocolCommand::SetBrightness(value)),
                 ModuleSetCommand::SetIdleTime { seconds } => Some(ProtocolCommand::SetIdleTime(seconds)),
+                // Module 6 doesn't support these commands, but we handle them gracefully
+                ModuleSetCommand::SetKeyColor { key_index, r, g, b } => Some(ProtocolCommand::SetKeyColor { key_index, r, g, b }),
+                ModuleSetCommand::ShowBackgroundByIndex { index } => Some(ProtocolCommand::ShowBackgroundByIndex { index }),
             }
         }
         None
@@ -209,6 +214,24 @@ impl Module6KeysHandler {
                     let secs = crate::config::get_idle_time_seconds() as i32;
                     let le = secs.to_le_bytes();
                     buf[2] = le[0]; buf[3] = le[1]; buf[4] = le[2]; buf[5] = le[3];
+                    return Some(total_len);
+                }
+                // Module 6 doesn't support GetUnitInformation, but we handle it gracefully
+                ModuleGetCommand::GetUnitInformation => {
+                    // Return a default response for Module 6
+                    buf[0] = 0x08;
+                    buf[1] = 0x02; // rows
+                    buf[2] = 0x03; // columns
+                    buf[3] = 0x48; buf[4] = 0x00; // Key Width (72px)
+                    buf[5] = 0x48; buf[6] = 0x00; // Key Height (72px)
+                    buf[7] = 0xE0; buf[8] = 0x01; // LCD Width (480px)
+                    buf[9] = 0x10; buf[10] = 0x01; // LCD Height (272px)
+                    buf[11] = 0x18; // Image BPP (24)
+                    buf[12] = 0x00; // Image Color Scheme
+                    buf[13] = 0x00; // Number of key images in Gallery
+                    buf[14] = 0x00; // Number of LCD images in Gallery
+                    buf[15] = 0x00; // Number of frames for DEMO
+                    buf[16] = 0x00; // Reserved
                     return Some(total_len);
                 }
             }
