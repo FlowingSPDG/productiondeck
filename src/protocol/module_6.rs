@@ -177,7 +177,7 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
             0x15, 0x00, //   Logical Minimum (0)
             0x26, 0xFF, 0x00, //   Logical Maximum (255)
             0x75, 0x08, //   Report Size (8)
-            0x95, 0x20, //   Report Count (32)
+            0x95, 0x3F, //   Report Count (63) -> total 64 bytes incl. Report ID
             0x81, 0x02, //   Input (Data,Var,Abs)
             // Output report 0x02 (image/data chunks)
             0x85, 0x02, //   Report ID 0x02
@@ -209,17 +209,28 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     }
 
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
-        let count = buttons.mapped_buttons.iter().take_while(|_| true).count();
-        let used = core::cmp::min(32, count);
-        let needed = 1 + used;
-        if report.len() < needed {
+        // 64 bytes total per packet: Report ID (1) + 63 data bytes
+        const MAX_USB_SIZE: usize = 64;
+        
+        if report.len() < MAX_USB_SIZE {
             return 0;
         }
-        report[0] = 0x01; // Report ID
-        for i in 0..used {
+        
+        // Set Report ID
+        report[0] = 0x01;
+        
+        // Map up to 63 data bytes; Module 6 needs first 6
+        let button_count = core::cmp::min(6, buttons.mapped_buttons.len());
+        for i in 0..button_count {
             report[1 + i] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
-        needed
+        
+        // Zero out remaining bytes in the USB packet
+        for i in (1 + button_count)..MAX_USB_SIZE {
+            report[i] = 0;
+        }
+        
+        MAX_USB_SIZE
     }
 
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ModuleSetCommand> {
