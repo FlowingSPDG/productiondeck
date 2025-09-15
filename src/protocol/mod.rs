@@ -18,7 +18,10 @@ use heapless::Vec;
 #[allow(clippy::large_enum_variant)]
 pub enum OutputReportResult {
     /// Update Key Image (Module 15/32: cmd 0x07, Module 6: cmd 0x01 with ShowFlag=1)
-    KeyImageComplete { key_id: u8, image: Vec<u8, IMAGE_BUFFER_SIZE> },
+    KeyImageComplete {
+        key_id: u8,
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
     /// Update Full Screen Image (Module 15/32: cmd 0x08)
     FullScreenImageChunk,
     /// Update Boot Logo (Module 15/32: cmd 0x09, Module 6 uses Feature combo)
@@ -32,7 +35,10 @@ pub enum OutputReportResult {
 #[allow(clippy::large_enum_variant)]
 pub enum ImageProcessResult {
     /// Image processing complete, ready to display
-    Complete { key_id: u8, image: Vec<u8, IMAGE_BUFFER_SIZE> },
+    Complete {
+        key_id: u8,
+        image: Vec<u8, IMAGE_BUFFER_SIZE>,
+    },
     /// More packets needed to complete image
     Incomplete,
     /// Error processing image

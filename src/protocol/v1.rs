@@ -4,9 +4,8 @@
 
 use super::{ButtonMapping, OutputReportResult, ProtocolHandlerTrait};
 use crate::config::{
-    FEATURE_REPORT_BRIGHTNESS_V1, IMAGE_PROCESSING_BUFFER_SIZE,
-    STREAMDECK_BRIGHTNESS_RESET_MAGIC, STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2,
-    STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
+    FEATURE_REPORT_BRIGHTNESS_V1, IMAGE_PROCESSING_BUFFER_SIZE, STREAMDECK_BRIGHTNESS_RESET_MAGIC,
+    STREAMDECK_MAGIC_1, STREAMDECK_MAGIC_2, STREAMDECK_MAGIC_3, STREAMDECK_RESET_MAGIC,
 };
 use crate::device::ProtocolVersion;
 use crate::protocol::module::ModuleSetCommand;
@@ -99,7 +98,10 @@ impl ProtocolHandlerTrait for V1Handler {
             let completed_key = self.expected_key;
             self.reset_image_state();
 
-            OutputReportResult::KeyImageComplete { key_id: completed_key, image: complete_image }
+            OutputReportResult::KeyImageComplete {
+                key_id: completed_key,
+                image: complete_image,
+            }
         } else {
             // Ignore unexpected sequences for now
             OutputReportResult::Unhandled

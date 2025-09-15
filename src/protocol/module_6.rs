@@ -211,25 +211,25 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
     fn format_button_report(&self, buttons: &ButtonMapping, report: &mut [u8]) -> usize {
         // 64 bytes total per packet: Report ID (1) + 63 data bytes
         const MAX_USB_SIZE: usize = 64;
-        
+
         if report.len() < MAX_USB_SIZE {
             return 0;
         }
-        
+
         // Set Report ID
         report[0] = 0x01;
-        
+
         // Map up to 63 data bytes; Module 6 needs first 6
         let button_count = core::cmp::min(6, buttons.mapped_buttons.len());
         for i in 0..button_count {
             report[1 + i] = if buttons.mapped_buttons[i] { 1 } else { 0 };
         }
-        
+
         // Zero out remaining bytes in the USB packet
         for i in (1 + button_count)..MAX_USB_SIZE {
             report[i] = 0;
         }
-        
+
         MAX_USB_SIZE
     }
 
@@ -285,7 +285,9 @@ impl Module6KeysHandler {
                     buf[5] = le[3];
                     return Some(total_len);
                 }
-                _ => { return None; }
+                _ => {
+                    return None;
+                }
             }
         }
         None

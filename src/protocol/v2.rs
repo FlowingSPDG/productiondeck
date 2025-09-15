@@ -62,14 +62,14 @@ impl ProtocolHandlerTrait for V2Handler {
             if data[0] == OUTPUT_REPORT_IMAGE {
                 let cmd = data[1];
                 if cmd == IMAGE_COMMAND_V2 {
-                (
-                    cmd,
-                    data[2],
-                    data[3] != 0,
-                    u16::from_le_bytes([data[4], data[5]]),
-                    u16::from_le_bytes([data[6], data[7]]),
-                    8,
-                )
+                    (
+                        cmd,
+                        data[2],
+                        data[3] != 0,
+                        u16::from_le_bytes([data[4], data[5]]),
+                        u16::from_le_bytes([data[6], data[7]]),
+                        8,
+                    )
                 } else {
                     (cmd, 0, false, 0, 0, 0)
                 }
@@ -136,7 +136,10 @@ impl ProtocolHandlerTrait for V2Handler {
             let completed_key = self.expected_key;
             self.reset_image_state();
 
-            OutputReportResult::KeyImageComplete { key_id: completed_key, image: complete_image }
+            OutputReportResult::KeyImageComplete {
+                key_id: completed_key,
+                image: complete_image,
+            }
         } else {
             OutputReportResult::Unhandled
         }

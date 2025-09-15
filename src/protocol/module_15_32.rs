@@ -79,7 +79,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
         ProtocolVersion::Module15_32Keys
     }
 
-    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult { 
+    fn parse_output_report(&mut self, data: &[u8]) -> OutputReportResult {
         let report_id = data[0];
         let command = data[1];
 
@@ -126,12 +126,16 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
 
                         return OutputReportResult::Unhandled;
                     }
-                    _ => { return OutputReportResult::Unhandled; }
+                    _ => {
+                        return OutputReportResult::Unhandled;
+                    }
                 }
             }
-            _ => { return OutputReportResult::Unhandled; }
+            _ => {
+                return OutputReportResult::Unhandled;
+            }
         }
-     }
+    }
 
     fn map_buttons(
         &self,

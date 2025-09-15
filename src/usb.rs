@@ -134,12 +134,11 @@ impl StreamDeckHidHandler {
 
         match self.protocol_handler.parse_output_report(data) {
             OutputReportResult::KeyImageComplete { key_id, image } => {
-                info!(
-                    "Image complete for key {} ({} bytes)",
+                info!("Image complete for key {} ({} bytes)", key_id, image.len());
+                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData {
                     key_id,
-                    image.len()
-                );
-                let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { key_id, data: image });
+                    data: image,
+                });
             }
             OutputReportResult::FullScreenImageChunk => {
                 debug!("Full screen image chunk received (not assembled)");
@@ -334,13 +333,16 @@ async fn usb_task_impl(
                                 OutputReportResult::KeyImageComplete { key_id, image } => {
                                     let img_len = image.len();
                                     let _ = USB_COMMAND_CHANNEL.sender().try_send(
-                                        UsbCommand::ImageData { key_id, data: image },
+                                        UsbCommand::ImageData {
+                                            key_id,
+                                            data: image,
+                                        },
                                     );
                                     info!("Image complete for key {} ({} bytes)", key_id, img_len);
                                 }
-                                OutputReportResult::FullScreenImageChunk => { }
-                                OutputReportResult::BootLogoImageChunk => { }
-                                OutputReportResult::Unhandled => { }
+                                OutputReportResult::FullScreenImageChunk => {}
+                                OutputReportResult::BootLogoImageChunk => {}
+                                OutputReportResult::Unhandled => {}
                             }
                         }
                     }
