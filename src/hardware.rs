@@ -9,8 +9,6 @@ use embassy_rp::{peripherals, Peripherals};
 use embassy_rp::usb::Driver;
 use defmt::*;
 use heapless::Vec;
-use embassy_sync::channel::Channel;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 
 
 use crate::config;

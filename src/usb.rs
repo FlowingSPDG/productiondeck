@@ -81,95 +81,8 @@ impl RequestHandler for StreamDeckHidHandler {
                 None
             }
             ReportId::Feature(report_id) => {
-                // Handle feature report requests for StreamDeck devices
-                match report_id {
-                    // Firmware version getters (LD/AP2/AP1). Return 32 bytes with ASCII version at offset 5
-                    0xA0 | 0xA1 | 0xA2 => {
-                        let total_len = 32.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        buf[1] = 0x0c; // Length
-                        buf[2] = 0x31; // Type
-                        buf[3] = 0x33; // Type
-                        buf[4] = 0x00; // Null terminator
-                        let version = b"3.00.000";
-                        let start = 5;
-                        let end = (start + version.len()).min(total_len);
-                        buf[start..end].copy_from_slice(&version[..(end - start)]);
-                        info!("HID Get Report 0x{:02X}: returning {} bytes, version='3.00.000'", report_id, total_len);
-                        Some(total_len)
-                    }
-                    0x03 => {
-                        // Serial Number request
-                        let total_len = 32.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        buf[1] = 0x0c; // Length
-                        buf[2] = 0x31; // Type
-                        buf[3] = 0x33; // Type
-                        buf[4] = 0x00; // Null terminator
-                        let serial = config::USB_SERIAL.as_bytes();
-                        let start = 5;
-                        let end = (start + serial.len()).min(total_len);
-                        buf[start..end].copy_from_slice(&serial[..(end - start)]);
-                        info!("HID Get Report 0x03: returning {} bytes, serial='{}'", total_len, config::USB_SERIAL);
-                        Some(total_len)
-                    }
-                    0x04 => {
-                        // Version request (V1)
-                        let total_len = 17.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        let version = b"3.00.000";
-                        let start = 5; // V1 offset
-                        let end = (start + version.len()).min(total_len);
-                        buf[start..end].copy_from_slice(&version[..(end - start)]);
-                        info!("HID Get Report 0x04: returning {} bytes, version='3.00.000'", total_len);
-                        Some(total_len)
-                    }
-                    0x05 => {
-                        // Compatibility: read firmware via GET_REPORT 0x05
-                        let total_len = 32.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        buf[1] = 0x0c; // Length
-                        buf[2] = 0x31; // Type
-                        buf[3] = 0x33; // Type
-                        buf[4] = 0x00; // Null terminator
-                        let version = b"3.00.000";
-                        let start = 5;
-                        let end = (start + version.len()).min(total_len);
-                        buf[start..end].copy_from_slice(&version[..(end - start)]);
-                        info!("HID Get Report 0x05: returning {} bytes, version='3.00.000'", total_len);
-                        Some(total_len)
-                    }
-                    crate::config::FEATURE_REPORT_GET_IDLE_TIME => {
-                        // Get Idle Time before Sleep Mode (Feature GET). 32 bytes, with len and 32-bit little-endian seconds at offset 2
-                        let total_len = 32.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        buf[1] = 0x06; // Data length for following payload
-                        let seconds = crate::config::get_idle_time_seconds() as i32;
-                        let secs_le = seconds.to_le_bytes();
-                        buf[2] = secs_le[0];
-                        buf[3] = secs_le[1];
-                        buf[4] = secs_le[2];
-                        buf[5] = secs_le[3];
-                        info!("HID Get Report 0xA3: idle {} seconds", seconds);
-                        Some(total_len)
-                    }
-                    0x07 => {
-                        // Other feature reports - return appropriate size
-                        let total_len = 16.min(buf.len());
-                        for i in 0..total_len { buf[i] = 0x00; }
-                        buf[0] = report_id;
-                        Some(total_len)
-                    }
-                    _ => {
-                        warn!("Unknown feature report ID: 0x{:02x}", report_id);
-                        None
-                    }
-                }
+                // Delegate fully to protocol handler; no fallback here
+                self.protocol_handler.get_feature_report(report_id, buf)
             }
             _ => None,
         }
@@ -190,14 +103,11 @@ impl RequestHandler for StreamDeckHidHandler {
                             info!("Processing brightness command: {}%", brightness);
                             let _ = self.usb_command_sender.try_send(UsbCommand::SetBrightness(brightness));
                         }
-                        ProtocolCommand::ImageData { key_id, data } => {
-                            debug!("Processing image data for key {}", key_id);
-                            let _ = self.usb_command_sender.try_send(UsbCommand::ImageData { key_id, data });
-                        }
                         ProtocolCommand::SetIdleTime(secs) => {
                             crate::config::set_idle_time_seconds(secs);
                             info!("Set idle time to {} seconds", secs);
                         }
+                        _ => {}
                     }
                 }
             }

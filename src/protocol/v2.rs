@@ -225,4 +225,51 @@ impl ProtocolHandlerTrait for V2Handler {
             None
         }
     }
+
+    fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
+        match report_id {
+            0xA0 | 0xA1 | 0xA2 => {
+                let total_len = 32.min(buf.len());
+                for i in 0..total_len { buf[i] = 0x00; }
+                buf[0] = report_id;
+                buf[1] = 0x0c; // Length
+                buf[2] = 0x31; // Type
+                buf[3] = 0x33; // Type
+                buf[4] = 0x00; // Null terminator
+                let version = b"3.00.000";
+                let start = 5;
+                let end = (start + version.len()).min(total_len);
+                buf[start..end].copy_from_slice(&version[..(end - start)]);
+                Some(total_len)
+            }
+            0x03 => {
+                let total_len = 32.min(buf.len());
+                for i in 0..total_len { buf[i] = 0x00; }
+                buf[0] = report_id;
+                buf[1] = 0x0c; // Length
+                buf[2] = 0x31; // Type
+                buf[3] = 0x33; // Type
+                buf[4] = 0x00; // Null terminator
+                let serial = crate::config::USB_SERIAL.as_bytes();
+                let start = 5;
+                let end = (start + serial.len()).min(total_len);
+                buf[start..end].copy_from_slice(&serial[..(end - start)]);
+                Some(total_len)
+            }
+            crate::config::FEATURE_REPORT_GET_IDLE_TIME => {
+                let total_len = 32.min(buf.len());
+                for i in 0..total_len { buf[i] = 0x00; }
+                buf[0] = report_id;
+                buf[1] = 0x06;
+                let seconds = crate::config::get_idle_time_seconds() as i32;
+                let secs_le = seconds.to_le_bytes();
+                buf[2] = secs_le[0];
+                buf[3] = secs_le[1];
+                buf[4] = secs_le[2];
+                buf[5] = secs_le[3];
+                Some(total_len)
+            }
+            _ => None,
+        }
+    }
 }

@@ -4,10 +4,14 @@
 
 pub mod v1;
 pub mod v2;
+pub mod module;
+pub mod module_6;
+/// pub mod module_15_32;
 
 use heapless::Vec;
 use crate::config::IMAGE_BUFFER_SIZE;
 use crate::device::ProtocolVersion;
+use crate::protocol::module::FirmwareType;
 
 /// Protocol-specific image processing result
 #[derive(Debug)]
@@ -49,16 +53,26 @@ pub trait ProtocolHandlerTrait {
     
     /// Process feature report commands
     fn handle_feature_report(&mut self, report_id: u8, data: &[u8]) -> Option<ProtocolCommand>;
+
+    /// Build feature GET report. Default is unhandled.
+    fn get_feature_report(&mut self, _report_id: u8, _buf: &mut [u8]) -> Option<usize> { None }
 }
 
 /// Commands that can be generated from protocol processing
 #[derive(Debug, Clone)]
 pub enum ProtocolCommand {
     Reset,
+    ShowLogo,
+    UpdateToMemoryBank{}, // TODO: Implement
+    UpdateBootLogo{slice_index: u8},
+    FillLCDWithColor{r: u8, g: u8, b: u8},
+    FillKeyWithColor{key_id: u8, r: u8, g: u8, b: u8},
     SetBrightness(u8),
-    ImageData { key_id: u8, data: Vec<u8, IMAGE_BUFFER_SIZE> },
-    /// Set idle time before entering Sleep Mode (seconds). 0 disables sleep.
     SetIdleTime(i32),
+    GetFirmwareVersion(FirmwareType),
+    GetUnitSerialNumber,
+    GetIdleTime,
+    GetUnitInformation{rows: u8, cols: u8, key_width: u16, key_height: u16, image_bpp: u8, image_color_scheme: u8, number_of_key_images_in_image_buffer: u8, number_of_frames_for_demo: u8},
 }
 
 /// Enum-based protocol handler for no_std environment
@@ -66,6 +80,8 @@ pub enum ProtocolCommand {
 pub enum ProtocolHandler {
     V1(v1::V1Handler),
     V2(v2::V2Handler),
+    Module6Keys(module_6::Module6KeysHandler),
+    // Module15_32Keys(module_15_32::Module15_32KeysHandler),
 }
 
 impl ProtocolHandler {
@@ -74,6 +90,8 @@ impl ProtocolHandler {
         match version {
             ProtocolVersion::V1 => ProtocolHandler::V1(v1::V1Handler::new()),
             ProtocolVersion::V2 => ProtocolHandler::V2(v2::V2Handler::new()),
+            ProtocolVersion::Module6Keys => ProtocolHandler::Module6Keys(module_6::Module6KeysHandler::new()),
+            // ProtocolVersion::Module15_32Keys => ProtocolHandler::Module15_32Keys(module_15_32::Module15_32KeysHandler::new()),
         }
     }
     
@@ -82,6 +100,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(_) => ProtocolVersion::V1,
             ProtocolHandler::V2(_) => ProtocolVersion::V2,
+            ProtocolHandler::Module6Keys(_) => ProtocolVersion::Module6Keys,
+            // ProtocolHandler::Module15_32Keys(_) => ProtocolVersion::Module15_32Keys,
         }
     }
     
@@ -90,6 +110,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.process_image_packet(data),
             ProtocolHandler::V2(handler) => handler.process_image_packet(data),
+            ProtocolHandler::Module6Keys(handler) => handler.process_image_packet(data),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.process_image_packet(data),
         }
     }
     
@@ -98,6 +120,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
             ProtocolHandler::V2(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
+            ProtocolHandler::Module6Keys(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.map_buttons(physical_buttons, cols, rows, left_to_right),
         }
     }
     
@@ -106,6 +130,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.hid_descriptor(),
             ProtocolHandler::V2(handler) => handler.hid_descriptor(),
+            ProtocolHandler::Module6Keys(handler) => handler.hid_descriptor(),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.hid_descriptor(),
         }
     }
     
@@ -114,6 +140,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.input_report_size(button_count),
             ProtocolHandler::V2(handler) => handler.input_report_size(button_count),
+            ProtocolHandler::Module6Keys(handler) => handler.input_report_size(button_count),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.input_report_size(button_count),
         }
     }
     
@@ -122,6 +150,8 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.format_button_report(buttons, report),
             ProtocolHandler::V2(handler) => handler.format_button_report(buttons, report),
+            ProtocolHandler::Module6Keys(handler) => handler.format_button_report(buttons, report),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.format_button_report(buttons, report),
         }
     }
     
@@ -130,6 +160,18 @@ impl ProtocolHandler {
         match self {
             ProtocolHandler::V1(handler) => handler.handle_feature_report(report_id, data),
             ProtocolHandler::V2(handler) => handler.handle_feature_report(report_id, data),
+            ProtocolHandler::Module6Keys(handler) => handler.handle_feature_report(report_id, data),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.handle_feature_report(report_id, data),
+        }
+    }
+
+    /// Delegate feature GET report building to the specific handler
+    pub fn get_feature_report(&mut self, report_id: u8, buf: &mut [u8]) -> Option<usize> {
+        match self {
+            ProtocolHandler::V1(handler) => handler.get_feature_report(report_id, buf),
+            ProtocolHandler::V2(handler) => handler.get_feature_report(report_id, buf),
+            ProtocolHandler::Module6Keys(handler) => handler.get_feature_report(report_id, buf),
+            // ProtocolHandler::Module15_32Keys(handler) => handler.get_feature_report(report_id, buf),
         }
     }
 }
