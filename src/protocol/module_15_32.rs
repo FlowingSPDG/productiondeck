@@ -93,8 +93,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                         let _chunk_content = u16::from_le_bytes([data[4], data[5]]);
                         let _chunk_index = u16::from_le_bytes([data[6], data[7]]);
                         let _chunk_data = &data[8..];
-
-                        return OutputReportResult::Unhandled;
+                        OutputReportResult::Unhandled
                     }
                     0x08 => {
                         // Update Full Screen Image
@@ -103,8 +102,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                         let _chunk_content = u16::from_le_bytes([data[4], data[5]]);
                         let _chunk_index = u16::from_le_bytes([data[6], data[7]]);
                         let _chunk_data = &data[8..];
-
-                        return OutputReportResult::Unhandled;
+                        OutputReportResult::Unhandled
                     }
                     0x09 => {
                         // Update Boot Logo
@@ -113,8 +111,7 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                         let _chunk_index = u16::from_le_bytes([data[4], data[5]]);
                         let _chunk_contents_size = u16::from_le_bytes([data[6], data[7]]);
                         let _chunk_data = &data[8..];
-
-                        return OutputReportResult::Unhandled;
+                        OutputReportResult::Unhandled
                     }
                     0x0D => {
                         // Update Background
@@ -123,17 +120,12 @@ impl ProtocolHandlerTrait for Module15_32KeysHandler {
                         let _chunk_index = u16::from_le_bytes([data[4], data[5]]);
                         let _chunk_contents_size = u16::from_le_bytes([data[6], data[7]]);
                         let _chunk_data = &data[8..];
-
-                        return OutputReportResult::Unhandled;
+                        OutputReportResult::Unhandled
                     }
-                    _ => {
-                        return OutputReportResult::Unhandled;
-                    }
+                    _ => OutputReportResult::Unhandled,
                 }
             }
-            _ => {
-                return OutputReportResult::Unhandled;
-            }
+            _ => OutputReportResult::Unhandled,
         }
     }
 

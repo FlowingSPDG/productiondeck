@@ -42,7 +42,7 @@ impl Module6KeysHandler {
             0x0B => {
                 // Payload excludes Report ID.
                 // Commands at data[0]
-                if data.len() >= 1 {
+                if !data.is_empty() {
                     match data[0] {
                         0x63 => {
                             // data[1]: 0x00 Show Logo, 0x02 Update Boot Logo
@@ -226,9 +226,11 @@ impl ProtocolHandlerTrait for Module6KeysHandler {
         }
 
         // Zero out remaining bytes in the USB packet
-        for i in (1 + button_count)..MAX_USB_SIZE {
-            report[i] = 0;
-        }
+        report
+            .iter_mut()
+            .take(MAX_USB_SIZE)
+            .skip(1 + button_count)
+            .for_each(|b| *b = 0);
 
         MAX_USB_SIZE
     }
