@@ -22,7 +22,7 @@ Makefile
 output/
 
 # IDE files
-.vscode/
+
 .idea/
 *.code-workspace
 .vs/
