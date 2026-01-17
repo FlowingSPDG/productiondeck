@@ -14,6 +14,7 @@ use heapless::Vec;
 
 use crate::channels::DISPLAY_CHANNEL;
 use crate::config::*;
+use crate::device::DeviceConfig;
 use crate::types::DisplayCommand;
 
 // ===================================================================
@@ -185,62 +186,181 @@ impl DisplayController {
             key_id, x_start, y_start, x_end, y_end
         );
 
+        // Get device configuration for image processing parameters
+        let device = crate::config::get_current_device();
+        let display_config = device.display_config();
+
+        // Process image data - validate format and skip headers
+        let mut data_offset = 0;
+        let is_bmp = image_data.len() > 54 && image_data[0] == 0x42 && image_data[1] == 0x4D;
+        let expected_format = display_config.format;
+        
+        // Validate image format matches device configuration
+        if is_bmp && !matches!(expected_format, crate::device::ImageFormat::Bmp) {
+            warn!(
+                "Image format mismatch: received BMP but device expects {:?}",
+                expected_format
+            );
+            return;
+        }
+
+        // Skip BMP header if present (54 bytes)
+        if is_bmp {
+            data_offset = 54;
+            debug!("Skipped BMP header (54 bytes)");
+        }
+
+        let raw_image_data = &image_data[data_offset..];
+        let expected_size = image_size * image_size * 3;
+
+        // Validate image data size
+        if raw_image_data.len() < expected_size {
+            warn!(
+                "Image data too small: {} bytes, expected: {} ({}x{}x3)",
+                raw_image_data.len(),
+                expected_size,
+                image_size,
+                image_size
+            );
+            return;
+        }
+
+        // Warn if data is larger than expected (but continue processing)
+        if raw_image_data.len() > expected_size {
+            debug!(
+                "Image data larger than expected: {} bytes, expected: {} (extra data ignored)",
+                raw_image_data.len(),
+                expected_size
+            );
+        }
+
+        // Determine if we need BGR->RGB conversion (V1 devices use BGR in BMP)
+        let needs_bgr_conversion = matches!(display_config.format, crate::device::ImageFormat::Bmp);
+
         // Select the display
         self.cs.set_low();
 
         // Set window to key region
         self.set_window(x_start, y_start, x_end, y_end).await;
 
-        // Process image data - skip BMP header if present
-        let mut data_offset = 0;
-        if image_data.len() > 54 && image_data[0] == 0x42 && image_data[1] == 0x4D {
-            data_offset = 54; // Skip BMP header
-            debug!("Skipped BMP header");
-        }
-
-        let rgb_data = &image_data[data_offset..];
-        let expected_size = image_size * image_size * 3;
-
-        if rgb_data.len() < expected_size {
-            warn!(
-                "Image data too small: {} bytes, expected: {}",
-                rgb_data.len(),
-                expected_size
-            );
-            self.cs.set_high();
-            return;
-        }
-
-        // Convert RGB888 to RGB565 and send to display
-        let pixel_count = image_size * image_size;
-        let mut buffer = [0u8; 2]; // Buffer for one RGB565 pixel
-
-        for i in 0..pixel_count {
-            let rgb_offset = i * 3;
-            if rgb_offset + 2 < rgb_data.len() {
-                let r = rgb_data[rgb_offset];
-                let g = rgb_data[rgb_offset + 1];
-                let b = rgb_data[rgb_offset + 2];
-
-                // Convert to RGB565
-                let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8)
-                    | ((g as u16 & RGB565_GREEN_MASK) << 3)
-                    | (b as u16 >> RGB565_BLUE_SHIFT);
-
-                // Send as big-endian
-                buffer[0] = (rgb565 >> 8) as u8;
-                buffer[1] = (rgb565 & 0xFF) as u8;
-                let _ = self.spi.blocking_write(&buffer);
-            }
-        }
+        // Process and send pixels directly to avoid large buffer allocation
+        // This streams pixels: convert BGR->RGB, apply transformations, convert to RGB565, send to display
+        self.process_and_send_pixels_streaming(
+            raw_image_data,
+            image_size,
+            image_size,
+            needs_bgr_conversion,
+            display_config.needs_rotation,
+            display_config.flip_horizontal,
+            display_config.flip_vertical,
+        ).await;
 
         // Deselect display
         self.cs.set_high();
 
+        let pixel_count = image_size * image_size;
         info!(
             "Image displayed on key {} region: {} pixels",
             key_id, pixel_count
         );
+    }
+
+    /// Process and send pixels directly to display (memory-efficient streaming approach)
+    /// This avoids allocating large buffers by processing pixels on-the-fly
+    async fn process_and_send_pixels_streaming(
+        &mut self,
+        image_data: &[u8],
+        width: usize,
+        height: usize,
+        needs_bgr_conversion: bool,
+        needs_rotation: bool,
+        flip_horizontal: bool,
+        flip_vertical: bool,
+    ) {
+        let pixel_count = width * height;
+        let mut buffer = [0u8; 2]; // Buffer for one RGB565 pixel
+
+        // Process pixels in display order (after transformations)
+        for display_idx in 0..pixel_count {
+            // Calculate source pixel index after transformations
+            let (src_x, src_y) = self.calculate_source_pixel_position(
+                display_idx,
+                width,
+                height,
+                needs_rotation,
+                flip_horizontal,
+                flip_vertical,
+            );
+
+            // Get source pixel index in raw data
+            let src_idx = (src_y * width + src_x) * 3;
+            if src_idx + 2 >= image_data.len() {
+                continue;
+            }
+
+            // Extract RGB/BGR values
+            let (r, g, b) = if needs_bgr_conversion {
+                // BGR -> RGB: swap R and B channels
+                let b = image_data[src_idx];     // B in BGR
+                let g = image_data[src_idx + 1]; // G in BGR
+                let r = image_data[src_idx + 2]; // R in BGR
+                (r, g, b)
+            } else {
+                // Already RGB
+                (
+                    image_data[src_idx],
+                    image_data[src_idx + 1],
+                    image_data[src_idx + 2],
+                )
+            };
+
+            // Convert to RGB565
+            let rgb565 = ((r as u16 & RGB565_RED_MASK) << 8)
+                | ((g as u16 & RGB565_GREEN_MASK) << 3)
+                | (b as u16 >> RGB565_BLUE_SHIFT);
+
+            // Send as big-endian
+            buffer[0] = (rgb565 >> 8) as u8;
+            buffer[1] = (rgb565 & 0xFF) as u8;
+            let _ = self.spi.blocking_write(&buffer);
+        }
+    }
+
+    /// Calculate source pixel position after applying transformations
+    /// Returns (x, y) in source image coordinate system
+    fn calculate_source_pixel_position(
+        &self,
+        display_idx: usize,
+        width: usize,
+        height: usize,
+        needs_rotation: bool,
+        flip_horizontal: bool,
+        flip_vertical: bool,
+    ) -> (usize, usize) {
+        // Convert linear index to (x, y) in display coordinate system
+        let mut x = display_idx % width;
+        let mut y = display_idx / width;
+
+        // Apply transformations in reverse order (since we're mapping from display to source)
+        // Note: For 270° rotation, reverse is 90° rotation: (x, y) -> (y, width-1-x)
+        if needs_rotation {
+            // 270° clockwise rotation: reverse is 90° counter-clockwise
+            let old_x = x;
+            let old_y = y;
+            x = old_y;
+            y = width - 1 - old_x;
+        }
+
+        // Apply flips (reverse operation)
+        if flip_horizontal {
+            x = width - 1 - x;
+        }
+
+        if flip_vertical {
+            y = height - 1 - y;
+        }
+
+        (x, y)
     }
 
     async fn clear_key(&mut self, key_id: u8) {
